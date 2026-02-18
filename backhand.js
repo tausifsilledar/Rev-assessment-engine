@@ -4,7 +4,8 @@
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
-let currentMode = 'test'; 
+// CHANGED: Set default mode to 'learner'
+let currentMode = 'learner'; 
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
@@ -188,6 +189,10 @@ function initQuiz() {
     welcomeScreen.style.display = 'none';
     questionCard.style.display = 'block';
     resetBtn.style.display = 'block';
+    
+    // Ensure the dropdown shows 'learner' on load
+    modeSwitcher.value = currentMode;
+    
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
     
@@ -284,6 +289,3 @@ function calculateResult(auto) {
 
 function resetQuizState() { if(confirm("Clear all answers?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
-
-
-
