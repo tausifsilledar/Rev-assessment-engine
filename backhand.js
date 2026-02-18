@@ -15,7 +15,8 @@ let uploadedFileNames = [];
  * AUTO-LOAD CONFIGURATION
  */
 const AUTO_LOAD_FILES = [
-    'Data/zuora_billing.docx'
+    'Data/zuora_billing.docx',
+    'Data/zuora_billing_300.docx
 ];
 
 /**
@@ -263,3 +264,4 @@ function calculateResult(auto) {
 
 function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
+
