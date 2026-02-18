@@ -4,11 +4,11 @@
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
-let currentMode = 'learner'; // Default to learner
+let currentMode = 'learner'; 
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
-let startTime = 0; // Used to calculate time taken
+let startTime = 0; // Track start for duration calculation
 let uploadedFileNames = [];
 
 /**
@@ -60,14 +60,14 @@ async function autoLoadDataFolder() {
 
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             
-            // Append questions but don't init UI yet
+            // Append questions without initializing the UI yet
             parseQuestions(res.value, false); 
             updateFileNameUI();
         } catch (err) {
             console.error("Auto-load failed", err);
         }
     }
-    // Final init after all files are appended
+    // Final start once all files are in the 'questions' array
     if (questions.length > 0) initQuiz();
 }
 
@@ -162,6 +162,7 @@ function parseQuestions(rawText, shouldInit = true) {
 
 function initQuiz() {
     currentMode = modeSwitcher.value; 
+
     currentIndex = 0; 
     isSubmitted = false; 
     userAnswers = {}; 
@@ -174,7 +175,7 @@ function initQuiz() {
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
     
-    // Set global start time when quiz begins
+    // Set start time for duration tracking
     startTime = Date.now();
 
     if (currentMode === 'timed') startTimer(questions.length * 60); 
@@ -206,6 +207,7 @@ function renderQuestion() {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
+        
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
 
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
@@ -253,12 +255,11 @@ function calculateResult(auto) {
     isSubmitted = true; 
     stopTimer();
     
-    // Calculate Time Taken
-    const endTime = Date.now();
-    const totalSeconds = Math.floor((endTime - startTime) / 1000);
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    const timeString = `${mins}m ${secs}s`;
+    // Calculate Duration
+    const durationMs = Date.now() - startTime;
+    const mins = Math.floor(durationMs / 60000);
+    const secs = Math.floor((durationMs % 60000) / 1000);
+    const timeDisplayStr = `${mins}m ${secs}s`;
 
     let score = 0;
     let attempted = 0;
@@ -271,17 +272,15 @@ function calculateResult(auto) {
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
 
-    const percentage = ((score / questions.length) * 100).toFixed(1);
+    const percent = ((score / questions.length) * 100).toFixed(1);
 
-    // Build Detailed Results
+    // Build the detail string
     resultDetails.innerHTML = `
-        <div style="line-height: 1.8;">
-            <p><strong>Assessment Summary</strong></p>
-            <hr style="margin: 10px 0; border: 0; border-top: 1px solid #eee;">
-            <p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>
-            <p><strong>Time Taken:</strong> ${timeString}</p>
+        <div style="text-align: left; padding: 10px;">
+            <p><strong>Final Score:</strong> ${score} / ${questions.length} (${percent}%)</p>
+            <p><strong>Time Taken:</strong> ${timeDisplayStr}</p>
             <p><strong>Attempted:</strong> ${attempted} / ${questions.length}</p>
-            <p><strong>Status:</strong> ${percentage >= 70 ? '<span style="color:#059669">Passed</span>' : '<span style="color:#dc2626">Failed</span>'}</p>
+            <p><strong>Accuracy:</strong> ${attempted > 0 ? ((score / attempted) * 100).toFixed(1) : 0}%</p>
         </div>
     `;
     
