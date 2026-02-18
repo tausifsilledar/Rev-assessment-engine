@@ -4,11 +4,11 @@
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
-let currentMode = 'learner'; 
+let currentMode = 'learner'; // Default to learner
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
-let startTime = 0; // Track start for duration calculation
+let startTime = 0;
 let uploadedFileNames = [];
 
 /**
@@ -59,15 +59,12 @@ async function autoLoadDataFolder() {
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
 
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-            
-            // Append questions without initializing the UI yet
             parseQuestions(res.value, false); 
             updateFileNameUI();
         } catch (err) {
             console.error("Auto-load failed", err);
         }
     }
-    // Final start once all files are in the 'questions' array
     if (questions.length > 0) initQuiz();
 }
 
@@ -175,7 +172,7 @@ function initQuiz() {
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
     
-    // Set start time for duration tracking
+    // Capture the start time for the assessment summary
     startTime = Date.now();
 
     if (currentMode === 'timed') startTimer(questions.length * 60); 
@@ -207,7 +204,6 @@ function renderQuestion() {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
-        
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
 
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
@@ -254,16 +250,17 @@ function stopTimer() { clearInterval(timerInterval); timerDisplay.innerText = "0
 function calculateResult(auto) {
     isSubmitted = true; 
     stopTimer();
-    
-    // Calculate Duration
-    const durationMs = Date.now() - startTime;
-    const mins = Math.floor(durationMs / 60000);
-    const secs = Math.floor((durationMs % 60000) / 1000);
-    const timeDisplayStr = `${mins}m ${secs}s`;
 
+    // 1. Calculate Time Taken
+    const endTime = Date.now();
+    const elapsedTotalSeconds = Math.floor((endTime - startTime) / 1000);
+    const mins = Math.floor(elapsedTotalSeconds / 60);
+    const secs = elapsedTotalSeconds % 60;
+    const timeTakenStr = `${mins}m ${secs}s`;
+
+    // 2. Calculate Score & Attempts
     let score = 0;
     let attempted = 0;
-
     questions.forEach((q, i) => {
         const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
@@ -272,19 +269,20 @@ function calculateResult(auto) {
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
 
-    const percent = ((score / questions.length) * 100).toFixed(1);
+    const percentage = ((score / questions.length) * 100).toFixed(1);
 
-    // Build the detail string
+    // 3. Render Detailed Summary
     resultDetails.innerHTML = `
-        <div style="text-align: left; padding: 10px;">
-            <p><strong>Final Score:</strong> ${score} / ${questions.length} (${percent}%)</p>
-            <p><strong>Time Taken:</strong> ${timeDisplayStr}</p>
+        <div style="text-align: left; line-height: 1.8; font-size: 1.1em;">
+            <p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>
+            <p><strong>Time Taken:</strong> ${timeTakenStr}</p>
             <p><strong>Attempted:</strong> ${attempted} / ${questions.length}</p>
-            <p><strong>Accuracy:</strong> ${attempted > 0 ? ((score / attempted) * 100).toFixed(1) : 0}%</p>
+            <p><strong>Status:</strong> ${percentage >= 70 ? '<span style="color:#059669">PASSED</span>' : '<span style="color:#dc2626">FAILED</span>'}</p>
         </div>
     `;
-    
+
     resultModal.style.display = 'flex';
+    renderNav(); 
     renderQuestion(); 
 }
 
