@@ -12,6 +12,15 @@ let startTime = 0;
 let uploadedFileNames = [];
 
 /**
+ * AUTO-LOAD CONFIGURATION
+ * These names must match your files in the /Data folder EXACTLY.
+ */
+const AUTO_LOAD_FILES = [
+    'Data/quiz.docx', 
+    'Data/questions.pdf'
+]; 
+
+/**
  * DOM ELEMENTS
  */
 const fileInput = document.getElementById('fileInput');
@@ -31,6 +40,48 @@ const modeSwitcher = document.getElementById('modeSwitcher');
 const timerDisplay = document.getElementById('timerDisplay');
 const resultModal = document.getElementById('resultModal');
 const resultDetails = document.getElementById('resultDetails');
+
+/**
+ * INITIALIZATION & AUTO-LOAD
+ */
+window.addEventListener('DOMContentLoaded', () => {
+    autoLoadDataFolder();
+});
+
+async function autoLoadDataFolder() {
+    for (const filePath of AUTO_LOAD_FILES) {
+        try {
+            const response = await fetch(filePath);
+            if (!response.ok) {
+                console.warn(`File not found on server: ${filePath}`);
+                continue;
+            }
+            
+            const arrayBuffer = await response.arrayBuffer();
+            const fileName = filePath.split('/').pop();
+            const ext = fileName.split('.').pop().toLowerCase();
+            
+            if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
+
+            let text = "";
+            if (ext === 'docx' || ext === 'doc') {
+                const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                text = res.value;
+            } else if (ext === 'pdf') {
+                text = await parsePDF(arrayBuffer);
+            } else if (ext === 'xlsx' || ext === 'csv') {
+                text = parseExcel(arrayBuffer);
+            } else {
+                text = new TextDecoder("utf-8").decode(arrayBuffer);
+            }
+            
+            parseQuestions(text);
+            updateFileNameUI();
+        } catch (err) {
+            console.error("Auto-load failed for: " + filePath, err);
+        }
+    }
+}
 
 /**
  * EVENT LISTENERS
