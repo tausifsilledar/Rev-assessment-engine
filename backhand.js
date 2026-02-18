@@ -17,8 +17,7 @@ let uploadedFileNames = [];
  */
 const AUTO_LOAD_FILES = [
     'Data/zuora_billing.docx'
-    
-]; 
+];
 
 /**
  * DOM ELEMENTS
@@ -52,33 +51,32 @@ async function autoLoadDataFolder() {
     for (const filePath of AUTO_LOAD_FILES) {
         try {
             const response = await fetch(filePath);
+            
             if (!response.ok) {
-                console.warn(`File not found on server: ${filePath}`);
+                console.error("Could not find file: " + filePath);
                 continue;
             }
             
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
-            const ext = fileName.split('.').pop().toLowerCase();
             
-            if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
-
-            let text = "";
-            if (ext === 'docx' || ext === 'doc') {
-                const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-                text = res.value;
-            } else if (ext === 'pdf') {
-                text = await parsePDF(arrayBuffer);
-            } else if (ext === 'xlsx' || ext === 'csv') {
-                text = parseExcel(arrayBuffer);
-            } else {
-                text = new TextDecoder("utf-8").decode(arrayBuffer);
+            if (!uploadedFileNames.includes(fileName)) {
+                uploadedFileNames.push(fileName);
             }
+
+            // Processing the Word document
+            const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+            const text = res.value;
             
-            parseQuestions(text);
-            updateFileNameUI();
+            if (text.trim().length > 0) {
+                parseQuestions(text);
+                updateFileNameUI();
+                console.log("Successfully loaded questions from " + fileName);
+            } else {
+                console.warn("File was loaded but no text was found.");
+            }
         } catch (err) {
-            console.error("Auto-load failed for: " + filePath, err);
+            console.error("Error during auto-load:", err);
         }
     }
 }
@@ -286,5 +284,6 @@ function calculateResult(auto) {
 
 function resetQuizState() { if(confirm("Clear all answers?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
+
 
 
