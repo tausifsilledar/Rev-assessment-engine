@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Quiz Viewer </title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';</script>
+  
+    <style>
+        :root {
+            --primary-bg: #f3f4f6;
+            --sidebar-bg: #ffffff;
+            --accent-color: #2563eb;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --header-height: 60px;
+            --success-color: #059669;
+            --danger-color: #dc2626;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            height: var(--header-height);
+            background-color: #111827;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 100;
+        }
+
+        .header-controls { display: flex; align-items: center; gap: 15px; }
+
+        #timerDisplay {
+            font-family: monospace;
+            background: var(--danger-color);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: none;
+        }
+
+        #modeSwitcher {
+            background: #374151;
+            color: white;
+            border: 1px solid #4b5563;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        main { display: flex; flex: 1; overflow: hidden; }
+
+        aside {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .upload-section {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        input[type="file"] { display: none; }
+
+        .custom-file-upload {
+            display: inline-block;
+            padding: 8px 16px;
+            background: var(--accent-color);
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        #fileNameDisplay {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--accent-color);
+            font-weight: bold;
+            margin-top: 8px;
+            word-wrap: break-word;
+        }
+
+        .btn-info {
+            background: none;
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            margin-top: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .nav-list { flex: 1; overflow-y: auto; margin-top: 10px; }
+
+        .nav-item {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            border: 1px solid transparent;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .nav-item.active { background: #eff6ff; color: var(--accent-color); font-weight: 600; border-color: #bfdbfe; }
+        .nav-item.answered { color: var(--success-color); }
+
+        .sidebar-footer {
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .content-area { flex: 1; padding: 40px; overflow-y: auto; display: flex; justify-content: center; }
+
+        .question-card {
+            background: white; width: 100%; max-width: 800px; padding: 40px; border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: fit-content;
+        }
+
+        .question-number { color: var(--accent-color); font-weight: 700; font-size: 0.875rem; margin-bottom: 8px; display: block; }
+        .question-text { font-size: 1.25rem; line-height: 1.6; font-weight: 600; margin-bottom: 30px; }
+
+        .option-label {
+            display: flex; align-items: center; padding: 16px; border: 1px solid var(--border-color);
+            border-radius: 8px; cursor: pointer; margin-top: 10px;
+        }
+
+        .footer {
+            background: white; border-top: 1px solid var(--border-color);
+            padding: 16px 40px; display: flex; justify-content: space-between; align-items: center;
+        }
+
+        button { padding: 10px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; }
+        .btn-prev { background: #e5e7eb; }
+        .btn-next { background: var(--accent-color); color: white; }
+        .btn-submit { background: var(--success-color); color: white; display: none; }
+        .btn-reset { background: #6b7280; color: white; display: none; }
+
+        /* Modals */
+        #resultModal, #formatModal {
+            display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+        }
+        .modal-content { background: white; padding: 40px; border-radius: 12px; max-width: 450px; width: 90%; text-align: center; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-title">Assessment Engine v2.0</div>
+    <div class="header-controls">
+        <div id="timerDisplay">00:00</div>
+        <select id="modeSwitcher">
+            <option value="test">Test </option>
+            <option value="timed">Test With Timer</option>
+            <option value="learner">Learner </option>
+        </select>
+    </div>
+</header>
+
+<main>
+    <aside>
+        <div class="upload-section">
+            <label for="fileInput" class="custom-file-upload">Choose File</label>
+            <input type="file" id="fileInput" accept=".docx,.doc,.pdf,.txt,.xlsx,.csv" multiple />
+            <div id="fileNameDisplay">No files selected</div>
+            <button class="btn-info" onclick="toggleFormatGuide()">Question Format Guide</button>
+        </div>
+        <div id="navList" class="nav-list"></div>
+        <div class="sidebar-footer">
+            
+        </div>
+    </aside>
+
+    <div class="content-area">
+        <div id="welcomeScreen" style="text-align: center;">
+            <h2 style="margin-bottom: 10px;">Ready to Begin?</h2>
+            <p>Upload your assessment files to start.</p>
+        </div>
+        <div class="question-card" id="questionCard" style="display: none;">
+            <span id="qNumText" class="question-number"></span>
+            <div id="qText" class="question-text"></div>
+            <div id="optionsList" class="options-container"></div>
+        </div>
+    </div>
+</main>
+
+<div id="resultModal">
+    <div class="modal-content">
+        <h2 style="margin-bottom: 15px;">Assessment Summary</h2>
+        <div id="resultDetails" style="text-align: left; line-height: 2; margin-bottom: 25px;"></div>
+        <button class="btn-next" style="width: 100%;" onclick="document.getElementById('resultModal').style.display='none'">Review Answers</button>
+    </div>
+</div>
+
+<div id="formatModal">
+    <div class="modal-content">
+        <h3 style="margin-bottom:15px;">Required Question Format</h3>
+        <p style="font-size: 0.85rem; text-align: left; line-height: 1.5; color: #4b5563;">
+            1. What is the capital of France?<br>
+            A. Berlin<br>
+            B. Paris<br>
+            C. Madrid<br>
+            Answer: B<br><br>
+            <em>Multiple answers: Answer: A, B</em>
+        </p>
+        <div class="sidebar-footer">
+            Developed by <strong>Tausif Silledar</strong>
+        </div>
+        <button class="btn-next" style="margin-top:20px; width:100%;" onclick="toggleFormatGuide()">Close</button>
+    </div>
+</div>
+
+<footer class="footer">
+    <button class="btn-prev" id="prevBtn" disabled>Previous</button>
+    <div id="progressIndicator" style="font-size: 0.9rem; font-weight: 500;">Ready</div>
+    <div style="display: flex; gap: 10px;">
+        <button class="btn-reset" id="resetBtn">Reset</button>
+        <button class="btn-next" id="nextBtn" disabled>Next</button>
+        <button class="btn-submit" id="submitBtn">Submit Assessment</button>
+    </div>
+</footer>
+
+<script src="backhand.js"></script>
+<script>
+    function toggleFormatGuide() {
+        const modal = document.getElementById('formatModal');
+        modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
+    }
+</script>
+</body>
+</html>
