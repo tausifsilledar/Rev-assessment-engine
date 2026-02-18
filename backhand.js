@@ -8,12 +8,11 @@ let currentMode = 'learner'; // Default to learner
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
-let startTime = 0;
+let startTime = 0; // Used to calculate time taken
 let uploadedFileNames = [];
 
 /**
  * AUTO-LOAD CONFIGURATION
- * These match the files shown in your Data folder.
  */
 const AUTO_LOAD_FILES = [
     'Data/zuora_billing.docx',
@@ -50,7 +49,6 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 async function autoLoadDataFolder() {
-    // Loop through each file path in the configuration
     for (const filePath of AUTO_LOAD_FILES) {
         try {
             const response = await fetch(filePath);
@@ -62,14 +60,14 @@ async function autoLoadDataFolder() {
 
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             
-            // Pass 'false' so it doesn't trigger initQuiz until the loop is done
+            // Append questions but don't init UI yet
             parseQuestions(res.value, false); 
             updateFileNameUI();
         } catch (err) {
             console.error("Auto-load failed", err);
         }
     }
-    // Manually trigger the quiz start after all files are parsed
+    // Final init after all files are appended
     if (questions.length > 0) initQuiz();
 }
 
@@ -107,7 +105,6 @@ async function handleFile(event) {
             } else {
                 text = e.target.result;
             }
-            // For manual uploads, we usually want it to start the quiz immediately
             parseQuestions(text, true); 
             updateFileNameUI();
         };
@@ -156,7 +153,6 @@ function parseQuestions(rawText, shouldInit = true) {
                 if (optText) options.push(optText);
             }
             if (options.length > 0) {
-                // Use questions.length + 1 to keep original numbering consistent across files
                 questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
             }
         }
@@ -166,7 +162,6 @@ function parseQuestions(rawText, shouldInit = true) {
 
 function initQuiz() {
     currentMode = modeSwitcher.value; 
-
     currentIndex = 0; 
     isSubmitted = false; 
     userAnswers = {}; 
@@ -179,8 +174,10 @@ function initQuiz() {
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
     
+    // Set global start time when quiz begins
+    startTime = Date.now();
+
     if (currentMode === 'timed') startTimer(questions.length * 60); 
-    else startTime = Date.now();
     renderNav(); renderQuestion();
 }
 
@@ -241,7 +238,7 @@ function handleSelection(idx, multi) {
 }
 
 function startTimer(s) {
-    timeLeft = s; startTime = Date.now();
+    timeLeft = s; 
     timerInterval = setInterval(() => {
         timeLeft--;
         const m = Math.floor(timeLeft/60), sc = timeLeft%60;
@@ -253,14 +250,41 @@ function startTimer(s) {
 function stopTimer() { clearInterval(timerInterval); timerDisplay.innerText = "00:00"; }
 
 function calculateResult(auto) {
-    isSubmitted = true; stopTimer();
+    isSubmitted = true; 
+    stopTimer();
+    
+    // Calculate Time Taken
+    const endTime = Date.now();
+    const totalSeconds = Math.floor((endTime - startTime) / 1000);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    const timeString = `${mins}m ${secs}s`;
+
     let score = 0;
+    let attempted = 0;
+
     questions.forEach((q, i) => {
         const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
+        
+        if (userAnswers[i] && userAnswers[i].length > 0) attempted++;
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
-    resultDetails.innerHTML = `<p><strong>Score:</strong> ${score} / ${questions.length}</p>`;
+
+    const percentage = ((score / questions.length) * 100).toFixed(1);
+
+    // Build Detailed Results
+    resultDetails.innerHTML = `
+        <div style="line-height: 1.8;">
+            <p><strong>Assessment Summary</strong></p>
+            <hr style="margin: 10px 0; border: 0; border-top: 1px solid #eee;">
+            <p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>
+            <p><strong>Time Taken:</strong> ${timeString}</p>
+            <p><strong>Attempted:</strong> ${attempted} / ${questions.length}</p>
+            <p><strong>Status:</strong> ${percentage >= 70 ? '<span style="color:#059669">Passed</span>' : '<span style="color:#dc2626">Failed</span>'}</p>
+        </div>
+    `;
+    
     resultModal.style.display = 'flex';
     renderQuestion(); 
 }
