@@ -4,41 +4,46 @@
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
-let currentMode = 'learner'; 
+let currentMode = 'learner'; // Default to learner
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
 let startTime = 0;
 let uploadedFileNames = [];
 
-const AUTO_LOAD_FILES = ['Data/zuora_billing.docx'];
+/**
+ * AUTO-LOAD CONFIGURATION
+ */
+const AUTO_LOAD_FILES = [
+    'Data/zuora_billing.docx'
+];
 
 /**
  * DOM ELEMENTS
  */
-const fileInput = document.getElementById('fileInput'),
-      fileNameDisplay = document.getElementById('fileNameDisplay'),
-      navList = document.getElementById('navList'),
-      welcomeScreen = document.getElementById('welcomeScreen'),
-      questionCard = document.getElementById('questionCard'),
-      qText = document.getElementById('qText'),
-      qNumText = document.getElementById('qNumText'),
-      optionsList = document.getElementById('optionsList'),
-      prevBtn = document.getElementById('prevBtn'),
-      nextBtn = document.getElementById('nextBtn'),
-      submitBtn = document.getElementById('submitBtn'),
-      resetBtn = document.getElementById('resetBtn'),
-      progressIndicator = document.getElementById('progressIndicator'),
-      modeSwitcher = document.getElementById('modeSwitcher'),
-      timerDisplay = document.getElementById('timerDisplay'),
-      resultModal = document.getElementById('resultModal'),
-      resultDetails = document.getElementById('resultDetails'),
-      searchTermInput = document.getElementById('searchTerm');
+const fileInput = document.getElementById('fileInput');
+const fileNameDisplay = document.getElementById('fileNameDisplay');
+const navList = document.getElementById('navList');
+const welcomeScreen = document.getElementById('welcomeScreen');
+const questionCard = document.getElementById('questionCard');
+const qText = document.getElementById('qText');
+const qNumText = document.getElementById('qNumText');
+const optionsList = document.getElementById('optionsList');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const submitBtn = document.getElementById('submitBtn');
+const resetBtn = document.getElementById('resetBtn');
+const progressIndicator = document.getElementById('progressIndicator');
+const modeSwitcher = document.getElementById('modeSwitcher');
+const timerDisplay = document.getElementById('timerDisplay');
+const resultModal = document.getElementById('resultModal');
+const resultDetails = document.getElementById('resultDetails');
 
 /**
- * INITIALIZATION
+ * INITIALIZATION & AUTO-LOAD
  */
 window.addEventListener('DOMContentLoaded', () => {
+    // Force UI dropdown to show 'learner' immediately on refresh
     if (modeSwitcher) modeSwitcher.value = 'learner';
     autoLoadDataFolder();
 });
@@ -48,19 +53,19 @@ async function autoLoadDataFolder() {
         try {
             const response = await fetch(filePath);
             if (!response.ok) continue;
+            
             const arrayBuffer = await response.arrayBuffer();
-            const res = await mammoth.extractRawText({ arrayBuffer });
+            const fileName = filePath.split('/').pop();
+            if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
+
+            const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             parseQuestions(res.value);
-            uploadedFileNames.push(filePath.split('/').pop());
             updateFileNameUI();
-        } catch (err) { console.error("Load error:", err); }
+        } catch (err) {
+            console.error("Auto-load failed", err);
+        }
     }
 }
-
-/**
- * SEARCH LOGIC
- */
-searchTermInput.addEventListener('input', () => renderNav());
 
 /**
  * EVENT LISTENERS
@@ -68,15 +73,59 @@ searchTermInput.addEventListener('input', () => renderNav());
 fileInput.addEventListener('change', handleFile);
 prevBtn.addEventListener('click', () => navigate(-1));
 nextBtn.addEventListener('click', () => navigate(1));
-submitBtn.addEventListener('click', () => calculateResult());
-resetBtn.addEventListener('click', () => { if(confirm("Reset quiz?")) initQuiz(); });
+submitBtn.addEventListener('click', () => calculateResult(false));
+resetBtn.addEventListener('click', resetQuizState);
+
 modeSwitcher.addEventListener('change', (e) => {
     currentMode = e.target.value;
     if(questions.length > 0) initQuiz();
 });
 
 /**
- * CORE FUNCTIONS
+ * MULTI-FORMAT FILE HANDLING
+ */
+async function handleFile(event) {
+    const files = event.target.files;
+    if (!files.length) return;
+    for (let file of files) {
+        if (!uploadedFileNames.includes(file.name)) uploadedFileNames.push(file.name);
+        const ext = file.name.split('.').pop().toLowerCase();
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            let text = "";
+            if (ext === 'docx' || ext === 'doc') {
+                const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+                text = res.value;
+            } else if (ext === 'pdf') {
+                text = await parsePDF(e.target.result);
+            } else {
+                text = e.target.result;
+            }
+            parseQuestions(text);
+            updateFileNameUI();
+        };
+        if (['pdf','docx','doc'].includes(ext)) reader.readAsArrayBuffer(file);
+        else reader.readAsText(file);
+    }
+}
+
+async function parsePDF(data) {
+    const pdf = await pdfjsLib.getDocument({data}).promise;
+    let out = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        out += content.items.map(item => item.str).join(" ") + "\n";
+    }
+    return out;
+}
+
+function updateFileNameUI() {
+    fileNameDisplay.innerText = uploadedFileNames.join(", ");
+}
+
+/**
+ * PARSING ENGINE
  */
 function parseQuestions(rawText) {
     const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
@@ -88,28 +137,38 @@ function parseQuestions(rawText) {
         const parts = block.split(/(?=\s[A-G]\.\s)|(?=\n[A-G]\.\s)|(?=^[A-G]\.\s)/g);
         if (parts.length > 1) {
             let body = parts[0].replace(/^\s*\d+\.\s*/, '').trim();
-            let options = [], correctAns = "";
+            let options = [];
+            let correctAns = "";
             for (let i = 1; i < parts.length; i++) {
-                let opt = parts[i].trim();
-                if (opt.toLowerCase().includes("answer:")) {
-                    const s = opt.split(/answer[:\s]+/i);
-                    opt = s[0].trim();
-                    correctAns = s[1] ? s[1].trim() : "";
+                let optText = parts[i].trim();
+                if (optText.toLowerCase().includes("answer:")) {
+                    const splitArr = optText.split(/answer[:\s]+/i);
+                    optText = splitArr[0].trim();
+                    correctAns = splitArr[1] ? splitArr[1].trim() : "";
                 }
-                if (opt) options.push(opt);
+                if (optText) options.push(optText);
             }
-            if (options.length > 0) questions.push({ originalNumber: questions.length+1, text: body, options, answer: correctAns });
+            if (options.length > 0) {
+                questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
+            }
         }
     });
     if (questions.length > 0) initQuiz();
 }
 
 function initQuiz() {
-    currentMode = modeSwitcher.value;
-    currentIndex = 0; isSubmitted = false; userAnswers = {}; stopTimer();
+    // SYNC: Ensure internal mode matches what's visible on screen
+    currentMode = modeSwitcher.value; 
+
+    currentIndex = 0; 
+    isSubmitted = false; 
+    userAnswers = {}; 
+    stopTimer();
+
     welcomeScreen.style.display = 'none';
     questionCard.style.display = 'block';
     resetBtn.style.display = 'block';
+    
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
     
@@ -120,15 +179,13 @@ function initQuiz() {
 
 function renderNav() {
     navList.innerHTML = '';
-    const term = searchTermInput.value.toLowerCase();
-    questions.forEach((q, i) => {
-        if (q.text.toLowerCase().includes(term)) {
-            const div = document.createElement('div');
-            div.className = `nav-item ${i === currentIndex ? 'active' : ''} ${userAnswers[i] ? 'answered' : ''}`;
-            div.innerHTML = `<span>Q${q.originalNumber}</span><span style="font-size:0.7rem; opacity:0.6; white-space:nowrap; overflow:hidden;">${q.text.substring(0,15)}...</span>`;
-            div.onclick = () => { currentIndex = i; renderQuestion(); };
-            navList.appendChild(div);
-        }
+    questions.forEach((q, index) => {
+        const isAns = userAnswers[index] && userAnswers[index].length > 0;
+        const div = document.createElement('div');
+        div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
+        div.innerHTML = `<span>Question ${q.originalNumber}</span>${isAns ? '<span>✓</span>' : ''}`;
+        div.onclick = () => { currentIndex = index; renderQuestion(); };
+        navList.appendChild(div);
     });
 }
 
@@ -139,25 +196,33 @@ function renderQuestion() {
     optionsList.innerHTML = '';
     
     const ansKeys = q.answer.match(/[A-G]/gi) || [];
+    const isMulti = ansKeys.length > 1;
+
     q.options.forEach((opt, idx) => {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
+        
+        // Correctness check
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
 
+        // LEARNER MODE LOGIC: Highlight if correct automatically
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
-            label.style.borderColor = "var(--success-color)";
+            label.style.borderColor = "#059669";
             label.style.backgroundColor = "#ecfdf5";
             label.style.borderWidth = "2px";
         }
 
-        label.innerHTML = `<input type="${ansKeys.length > 1 ? 'checkbox' : 'radio'}" name="q" ${isSel ? 'checked' : ''} onchange="handleSelection(${idx}, ${ansKeys.length > 1})"> <span style="margin-left:10px">${opt}</span>`;
+        label.innerHTML = `
+            <input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''}
+                onchange="handleSelection(${idx}, ${isMulti})">
+            <span style="margin-left:10px;">${opt}</span>
+        `;
         optionsList.appendChild(label);
     });
-    
     prevBtn.disabled = currentIndex === 0;
     nextBtn.disabled = currentIndex === questions.length - 1;
-    progressIndicator.innerText = `Progress: ${Math.round(((currentIndex+1)/questions.length)*100)}%`;
+    progressIndicator.innerText = `Progress: ${Math.round(((currentIndex + 1) / questions.length) * 100)}%`;
     renderNav();
 }
 
@@ -171,36 +236,30 @@ function handleSelection(idx, multi) {
     renderNav();
 }
 
-async function handleFile(event) {
-    for (let file of event.target.files) {
-        const ext = file.name.split('.').pop().toLowerCase();
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            let text = "";
-            if (ext.includes('doc')) {
-                const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
-                text = res.value;
-            } else text = e.target.result;
-            parseQuestions(text);
-        };
-        if (ext.includes('doc')) reader.readAsArrayBuffer(file); else reader.readAsText(file);
-    }
+function startTimer(s) {
+    timeLeft = s; startTime = Date.now();
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        const m = Math.floor(timeLeft/60), sc = timeLeft%60;
+        timerDisplay.innerText = `${m.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
+        if(timeLeft <= 0) calculateResult(true);
+    }, 1000);
 }
 
-function startTimer(s) { timeLeft = s; timerInterval = setInterval(() => { timeLeft--; if(timeLeft <= 0) calculateResult(); }, 1000); }
-function stopTimer() { clearInterval(timerInterval); }
-function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
-function navigate(d) { currentIndex += d; renderQuestion(); }
+function stopTimer() { clearInterval(timerInterval); timerDisplay.innerText = "00:00"; }
 
-function calculateResult() {
+function calculateResult(auto) {
     isSubmitted = true; stopTimer();
     let score = 0;
     questions.forEach((q, i) => {
         const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
-        if (JSON.stringify(correct) === JSON.stringify(user)) score++;
+        if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
-    resultDetails.innerHTML = `<p>Score: ${score}/${questions.length}</p>`;
+    resultDetails.innerHTML = `<p><strong>Score:</strong> ${score} / ${questions.length}</p>`;
     resultModal.style.display = 'flex';
-    renderQuestion();
+    renderQuestion(); 
 }
+
+function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
+function navigate(d) { currentIndex += d; renderQuestion(); }
