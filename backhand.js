@@ -4,8 +4,7 @@
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
-// CHANGED: Set default mode to 'learner'
-let currentMode = 'learner'; 
+let currentMode = 'learner'; // Default to learner
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
@@ -14,7 +13,6 @@ let uploadedFileNames = [];
 
 /**
  * AUTO-LOAD CONFIGURATION
- * These names must match your files in the /Data folder EXACTLY.
  */
 const AUTO_LOAD_FILES = [
     'Data/zuora_billing.docx'
@@ -45,6 +43,8 @@ const resultDetails = document.getElementById('resultDetails');
  * INITIALIZATION & AUTO-LOAD
  */
 window.addEventListener('DOMContentLoaded', () => {
+    // Force UI dropdown to show 'learner' immediately on refresh
+    if (modeSwitcher) modeSwitcher.value = 'learner';
     autoLoadDataFolder();
 });
 
@@ -52,32 +52,17 @@ async function autoLoadDataFolder() {
     for (const filePath of AUTO_LOAD_FILES) {
         try {
             const response = await fetch(filePath);
-            
-            if (!response.ok) {
-                console.error("Could not find file: " + filePath);
-                continue;
-            }
+            if (!response.ok) continue;
             
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
-            
-            if (!uploadedFileNames.includes(fileName)) {
-                uploadedFileNames.push(fileName);
-            }
+            if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
 
-            // Processing the Word document
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-            const text = res.value;
-            
-            if (text.trim().length > 0) {
-                parseQuestions(text);
-                updateFileNameUI();
-                console.log("Successfully loaded questions from " + fileName);
-            } else {
-                console.warn("File was loaded but no text was found.");
-            }
+            parseQuestions(res.value);
+            updateFileNameUI();
         } catch (err) {
-            console.error("Error during auto-load:", err);
+            console.error("Auto-load failed", err);
         }
     }
 }
@@ -102,31 +87,24 @@ modeSwitcher.addEventListener('change', (e) => {
 async function handleFile(event) {
     const files = event.target.files;
     if (!files.length) return;
-
     for (let file of files) {
         if (!uploadedFileNames.includes(file.name)) uploadedFileNames.push(file.name);
         const ext = file.name.split('.').pop().toLowerCase();
         const reader = new FileReader();
-
         reader.onload = async (e) => {
             let text = "";
-            try {
-                if (ext === 'docx' || ext === 'doc') {
-                    const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
-                    text = res.value;
-                } else if (ext === 'pdf') {
-                    text = await parsePDF(e.target.result);
-                } else if (ext === 'xlsx' || ext === 'csv') {
-                    text = parseExcel(e.target.result);
-                } else {
-                    text = e.target.result;
-                }
-                parseQuestions(text);
-                updateFileNameUI();
-            } catch (err) { alert("Error reading: " + file.name); }
+            if (ext === 'docx' || ext === 'doc') {
+                const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+                text = res.value;
+            } else if (ext === 'pdf') {
+                text = await parsePDF(e.target.result);
+            } else {
+                text = e.target.result;
+            }
+            parseQuestions(text);
+            updateFileNameUI();
         };
-
-        if (['pdf','docx','doc','xlsx'].includes(ext)) reader.readAsArrayBuffer(file);
+        if (['pdf','docx','doc'].includes(ext)) reader.readAsArrayBuffer(file);
         else reader.readAsText(file);
     }
 }
@@ -140,11 +118,6 @@ async function parsePDF(data) {
         out += content.items.map(item => item.str).join(" ") + "\n";
     }
     return out;
-}
-
-function parseExcel(data) {
-    const wb = XLSX.read(data, {type: 'array'});
-    return XLSX.utils.sheet_to_txt(wb.Sheets[wb.SheetNames[0]]);
 }
 
 function updateFileNameUI() {
@@ -162,7 +135,6 @@ function parseQuestions(rawText) {
         const block = chunk.trim();
         if (!block) return;
         const parts = block.split(/(?=\s[A-G]\.\s)|(?=\n[A-G]\.\s)|(?=^[A-G]\.\s)/g);
-
         if (parts.length > 1) {
             let body = parts[0].replace(/^\s*\d+\.\s*/, '').trim();
             let options = [];
@@ -185,13 +157,17 @@ function parseQuestions(rawText) {
 }
 
 function initQuiz() {
-    currentIndex = 0; isSubmitted = false; userAnswers = {}; stopTimer();
+    // SYNC: Ensure internal mode matches what's visible on screen
+    currentMode = modeSwitcher.value; 
+
+    currentIndex = 0; 
+    isSubmitted = false; 
+    userAnswers = {}; 
+    stopTimer();
+
     welcomeScreen.style.display = 'none';
     questionCard.style.display = 'block';
     resetBtn.style.display = 'block';
-    
-    // Ensure the dropdown shows 'learner' on load
-    modeSwitcher.value = currentMode;
     
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
@@ -226,11 +202,15 @@ function renderQuestion() {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
+        
+        // Correctness check
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
 
+        // LEARNER MODE LOGIC: Highlight if correct automatically
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
-            label.style.borderColor = "var(--success-color)";
+            label.style.borderColor = "#059669";
             label.style.backgroundColor = "#ecfdf5";
+            label.style.borderWidth = "2px";
         }
 
         label.innerHTML = `
@@ -276,16 +256,10 @@ function calculateResult(auto) {
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
-
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    resultDetails.innerHTML = `
-        <p><strong>Score:</strong> ${score} / ${questions.length}</p>
-        <p><strong>Accuracy:</strong> ${Math.round((score/questions.length)*100)}%</p>
-        <p><strong>Time:</strong> ${Math.floor(elapsed/60)}m ${elapsed%60}s</p>
-    `;
+    resultDetails.innerHTML = `<p><strong>Score:</strong> ${score} / ${questions.length}</p>`;
     resultModal.style.display = 'flex';
     renderQuestion(); 
 }
 
-function resetQuizState() { if(confirm("Clear all answers?")) initQuiz(); }
+function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
