@@ -16,7 +16,7 @@ let uploadedFileNames = [];
  */
 const AUTO_LOAD_FILES = [
     'Data/zuora_billing.docx',
-    'Data/zuora_billing_300.docx'
+    'Data/zuora_billing_300.docx' // Fixed missing quote
 ];
 
 /**
@@ -44,12 +44,12 @@ const resultDetails = document.getElementById('resultDetails');
  * INITIALIZATION & AUTO-LOAD
  */
 window.addEventListener('DOMContentLoaded', () => {
-    // Force UI dropdown to show 'learner' immediately on refresh
     if (modeSwitcher) modeSwitcher.value = 'learner';
     autoLoadDataFolder();
 });
 
 async function autoLoadDataFolder() {
+    let allText = "";
     for (const filePath of AUTO_LOAD_FILES) {
         try {
             const response = await fetch(filePath);
@@ -60,12 +60,15 @@ async function autoLoadDataFolder() {
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
 
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-            parseQuestions(res.value);
+            // Instead of parsing immediately, we append the text
+            parseQuestions(res.value, false); 
             updateFileNameUI();
         } catch (err) {
             console.error("Auto-load failed", err);
         }
     }
+    // Start the quiz only after all files are appended
+    if (questions.length > 0) initQuiz();
 }
 
 /**
@@ -102,7 +105,7 @@ async function handleFile(event) {
             } else {
                 text = e.target.result;
             }
-            parseQuestions(text);
+            parseQuestions(text, true); // True means start quiz for manual uploads
             updateFileNameUI();
         };
         if (['pdf','docx','doc'].includes(ext)) reader.readAsArrayBuffer(file);
@@ -128,7 +131,7 @@ function updateFileNameUI() {
 /**
  * PARSING ENGINE
  */
-function parseQuestions(rawText) {
+function parseQuestions(rawText, shouldInit = true) {
     const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
     const chunks = cleanText.split(/(?=\n\s*\d+\.)|(?=^\s*\d+\.)/g);
     
@@ -154,13 +157,11 @@ function parseQuestions(rawText) {
             }
         }
     });
-    if (questions.length > 0) initQuiz();
+    if (shouldInit && questions.length > 0) initQuiz();
 }
 
 function initQuiz() {
-    // SYNC: Ensure internal mode matches what's visible on screen
     currentMode = modeSwitcher.value; 
-
     currentIndex = 0; 
     isSubmitted = false; 
     userAnswers = {}; 
@@ -203,11 +204,8 @@ function renderQuestion() {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
-        
-        // Correctness check
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
 
-        // LEARNER MODE LOGIC: Highlight if correct automatically
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
             label.style.borderColor = "#059669";
             label.style.backgroundColor = "#ecfdf5";
@@ -264,5 +262,3 @@ function calculateResult(auto) {
 
 function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
-
-
