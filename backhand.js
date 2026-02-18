@@ -13,6 +13,7 @@ let uploadedFileNames = [];
 
 /**
  * AUTO-LOAD CONFIGURATION
+ * These match the files shown in your Data folder.
  */
 const AUTO_LOAD_FILES = [
     'Data/zuora_billing.docx',
@@ -39,7 +40,6 @@ const modeSwitcher = document.getElementById('modeSwitcher');
 const timerDisplay = document.getElementById('timerDisplay');
 const resultModal = document.getElementById('resultModal');
 const resultDetails = document.getElementById('resultDetails');
-const searchTermInput = document.getElementById('searchTerm'); // Added for Search
 
 /**
  * INITIALIZATION & AUTO-LOAD
@@ -50,7 +50,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 async function autoLoadDataFolder() {
-    // Loop through all files and parse them
+    // Loop through each file path in the configuration
     for (const filePath of AUTO_LOAD_FILES) {
         try {
             const response = await fetch(filePath);
@@ -61,14 +61,15 @@ async function autoLoadDataFolder() {
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
 
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-            // Added second parameter 'false' to prevent early init
+            
+            // Pass 'false' so it doesn't trigger initQuiz until the loop is done
             parseQuestions(res.value, false); 
             updateFileNameUI();
         } catch (err) {
             console.error("Auto-load failed", err);
         }
     }
-    // Initialize once after all files are processed
+    // Manually trigger the quiz start after all files are parsed
     if (questions.length > 0) initQuiz();
 }
 
@@ -81,17 +82,13 @@ nextBtn.addEventListener('click', () => navigate(1));
 submitBtn.addEventListener('click', () => calculateResult(false));
 resetBtn.addEventListener('click', resetQuizState);
 
-if (searchTermInput) {
-    searchTermInput.addEventListener('input', () => renderNav());
-}
-
 modeSwitcher.addEventListener('change', (e) => {
     currentMode = e.target.value;
     if(questions.length > 0) initQuiz();
 });
 
 /**
- * MULTI-FORMAT FILE HANDLING
+ * FILE HANDLING
  */
 async function handleFile(event) {
     const files = event.target.files;
@@ -110,7 +107,8 @@ async function handleFile(event) {
             } else {
                 text = e.target.result;
             }
-            parseQuestions(text, true); // True for manual uploads to start quiz
+            // For manual uploads, we usually want it to start the quiz immediately
+            parseQuestions(text, true); 
             updateFileNameUI();
         };
         if (['pdf','docx','doc'].includes(ext)) reader.readAsArrayBuffer(file);
@@ -158,11 +156,11 @@ function parseQuestions(rawText, shouldInit = true) {
                 if (optText) options.push(optText);
             }
             if (options.length > 0) {
+                // Use questions.length + 1 to keep original numbering consistent across files
                 questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
             }
         }
     });
-    // Only initialize if explicitly told to (handles manual upload vs multi-autoload)
     if (shouldInit && questions.length > 0) initQuiz();
 }
 
@@ -188,18 +186,13 @@ function initQuiz() {
 
 function renderNav() {
     navList.innerHTML = '';
-    const searchTerm = searchTermInput ? searchTermInput.value.toLowerCase() : "";
-
     questions.forEach((q, index) => {
-        // Filter based on search term
-        if (q.text.toLowerCase().includes(searchTerm)) {
-            const isAns = userAnswers[index] && userAnswers[index].length > 0;
-            const div = document.createElement('div');
-            div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
-            div.innerHTML = `<span>Question ${q.originalNumber}</span>${isAns ? '<span>✓</span>' : ''}`;
-            div.onclick = () => { currentIndex = index; renderQuestion(); };
-            navList.appendChild(div);
-        }
+        const isAns = userAnswers[index] && userAnswers[index].length > 0;
+        const div = document.createElement('div');
+        div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
+        div.innerHTML = `<span>Question ${q.originalNumber}</span>${isAns ? '<span>✓</span>' : ''}`;
+        div.onclick = () => { currentIndex = index; renderQuestion(); };
+        navList.appendChild(div);
     });
 }
 
@@ -216,7 +209,6 @@ function renderQuestion() {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
-        
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
 
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
