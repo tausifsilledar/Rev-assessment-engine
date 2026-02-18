@@ -16,8 +16,8 @@ let uploadedFileNames = [];
  * These names must match your files in the /Data folder EXACTLY.
  */
 const AUTO_LOAD_FILES = [
-    'Data/quiz.docx', 
-    'Data/questions.pdf'
+    'Data/Final list.docx', 
+    'Data/zuora billing internal assesments.docx'
 ]; 
 
 /**
@@ -286,3 +286,4 @@ function calculateResult(auto) {
 
 function resetQuizState() { if(confirm("Clear all answers?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
+
