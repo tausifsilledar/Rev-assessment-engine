@@ -45,15 +45,23 @@ const resultDetails = document.getElementById('resultDetails');
  */
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
-    createAdminDashboard(); // Create the visual log window
+    createAdminDashboard(); // Creates the hidden panel
     autoLoadDataFolder();
     trackVisitors(); 
 });
 
-// Shortcut: Ctrl + Shift + L to download TXT
+/**
+ * SECRET SHORTCUT LISTENER
+ * Trigger: Alt + Ctrl + Shift + L
+ */
 window.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'L') {
-        saveLogsToTxt();
+    if (e.altKey && e.ctrlKey && e.shiftKey && e.key === 'L') {
+        const panel = document.getElementById('adminDashboard');
+        if (panel) {
+            // Toggle visibility
+            panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+            refreshLogDisplay();
+        }
     }
 });
 
@@ -74,30 +82,40 @@ async function autoLoadDataFolder() {
 }
 
 /**
- * VISUAL ADMIN DASHBOARD
- * This adds a window at the bottom of the site to show the appended data.
+ * HIDDEN ADMIN DASHBOARD
  */
 function createAdminDashboard() {
     const adminDiv = document.createElement('div');
     adminDiv.id = 'adminDashboard';
+    // Positioned as a fixed overlay so it's easy to see when activated
     adminDiv.style = `
-        margin-top: 30px;
-        padding: 20px;
-        background: #f8fafc;
-        border-top: 2px solid #e2e8f0;
+        display: none; 
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 350px;
+        max-height: 500px;
+        background: white;
+        border: 2px solid #334155;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        z-index: 9999;
+        padding: 15px;
         font-family: monospace;
-        font-size: 12px;
-        color: #334155;
-        max-height: 300px;
-        overflow-y: auto;
+        font-size: 11px;
+        border-radius: 8px;
     `;
     adminDiv.innerHTML = `
-        <h3 style="margin-top:0; color:#1e293b;">System Logs (Appended History)</h3>
-        <div id="logContent" style="white-space: pre-wrap;">Loading logs...</div>
-        <button onclick="saveLogsToTxt()" style="margin-top:10px; padding:5px 10px; cursor:pointer;">Download .txt File</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:10px;">
+            <strong style="color:#1e293b;">SECRET VISITOR LOGS</strong>
+            <button onclick="document.getElementById('adminDashboard').style.display='none'" style="cursor:pointer; border:none; background:none; font-weight:bold;">X</button>
+        </div>
+        <div id="logContent" style="white-space: pre-wrap; overflow-y: auto; max-height: 350px; background:#f1f5f9; padding:5px; border-radius:4px;">Loading...</div>
+        <div style="margin-top:10px; display:flex; gap:5px;">
+            <button onclick="saveLogsToTxt()" style="flex:1; cursor:pointer; padding:5px;">Download .txt</button>
+            <button onclick="if(confirm('Clear all history?')){localStorage.removeItem('master_visitor_log'); refreshLogDisplay();}" style="cursor:pointer; padding:5px; color:red;">Clear</button>
+        </div>
     `;
     document.body.appendChild(adminDiv);
-    refreshLogDisplay();
 }
 
 function refreshLogDisplay() {
@@ -113,21 +131,23 @@ function appendToPermanentLog(newEntry) {
     let existingLogs = localStorage.getItem('master_visitor_log');
     let updatedLogs = existingLogs ? existingLogs + "\n" + newEntry : newEntry;
     localStorage.setItem('master_visitor_log', updatedLogs);
-    refreshLogDisplay(); // Immediately update the window on the site
+    refreshLogDisplay();
 }
 
 async function trackVisitors() {
     try {
-        // Using a different service to ensure IP detection is fresh
         const response = await fetch('https://api.ipify.org?format=json');
         const data = await response.json();
-        const entry = `[VISIT] ${new Date().toLocaleString()} | IP: ${data.ip} | UserAgent: ${navigator.userAgent.substring(0,50)}`;
+        const entry = `[VISIT] ${new Date().toLocaleString()} | IP: ${data.ip}`;
         appendToPermanentLog(entry);
     } catch (e) {
-        appendToPermanentLog(`[VISIT] ${new Date().toLocaleString()} | IP: Unable to detect`);
+        appendToPermanentLog(`[VISIT] ${new Date().toLocaleString()} | IP: Error`);
     }
 }
 
+/**
+ * REST OF CODE (Unchanged)
+ */
 function calculateResult(auto) {
     isSubmitted = true; stopTimer();
     const endTime = Date.now();
@@ -140,19 +160,12 @@ function calculateResult(auto) {
         if (JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
     const percentage = ((score / questions.length) * 100).toFixed(1);
-    
     resultDetails.innerHTML = `<p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>`;
     resultModal.style.display = 'flex';
-    
-    // Append score to history
     appendToPermanentLog(`[RESULT] ${new Date().toLocaleString()} | Score: ${score}/${questions.length} (${percentage}%)`);
-    
     renderNav(); renderQuestion(); 
 }
 
-/**
- * EXISTING FUNCTIONS (UNCHANGED)
- */
 function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
 function parseQuestions(rawText, shouldInit = true) {
     const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
