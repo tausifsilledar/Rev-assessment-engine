@@ -45,11 +45,12 @@ const resultDetails = document.getElementById('resultDetails');
  */
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
+    createAdminDashboard(); // Create the visual log window
     autoLoadDataFolder();
-    trackVisitors(); // Capture visitor info immediately
+    trackVisitors(); 
 });
 
-// SECRET SHORTCUT: Press Ctrl + Shift + L to download the full history TXT
+// Shortcut: Ctrl + Shift + L to download TXT
 window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key === 'L') {
         saveLogsToTxt();
@@ -73,10 +74,86 @@ async function autoLoadDataFolder() {
 }
 
 /**
- * PARSING & NAVIGATION
+ * VISUAL ADMIN DASHBOARD
+ * This adds a window at the bottom of the site to show the appended data.
+ */
+function createAdminDashboard() {
+    const adminDiv = document.createElement('div');
+    adminDiv.id = 'adminDashboard';
+    adminDiv.style = `
+        margin-top: 30px;
+        padding: 20px;
+        background: #f8fafc;
+        border-top: 2px solid #e2e8f0;
+        font-family: monospace;
+        font-size: 12px;
+        color: #334155;
+        max-height: 300px;
+        overflow-y: auto;
+    `;
+    adminDiv.innerHTML = `
+        <h3 style="margin-top:0; color:#1e293b;">System Logs (Appended History)</h3>
+        <div id="logContent" style="white-space: pre-wrap;">Loading logs...</div>
+        <button onclick="saveLogsToTxt()" style="margin-top:10px; padding:5px 10px; cursor:pointer;">Download .txt File</button>
+    `;
+    document.body.appendChild(adminDiv);
+    refreshLogDisplay();
+}
+
+function refreshLogDisplay() {
+    const logContainer = document.getElementById('logContent');
+    const logs = localStorage.getItem('master_visitor_log') || "No history recorded yet.";
+    if (logContainer) logContainer.innerText = logs;
+}
+
+/**
+ * LOGGING SYSTEM (APPEND ONLY)
+ */
+function appendToPermanentLog(newEntry) {
+    let existingLogs = localStorage.getItem('master_visitor_log');
+    let updatedLogs = existingLogs ? existingLogs + "\n" + newEntry : newEntry;
+    localStorage.setItem('master_visitor_log', updatedLogs);
+    refreshLogDisplay(); // Immediately update the window on the site
+}
+
+async function trackVisitors() {
+    try {
+        // Using a different service to ensure IP detection is fresh
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        const entry = `[VISIT] ${new Date().toLocaleString()} | IP: ${data.ip} | UserAgent: ${navigator.userAgent.substring(0,50)}`;
+        appendToPermanentLog(entry);
+    } catch (e) {
+        appendToPermanentLog(`[VISIT] ${new Date().toLocaleString()} | IP: Unable to detect`);
+    }
+}
+
+function calculateResult(auto) {
+    isSubmitted = true; stopTimer();
+    const endTime = Date.now();
+    const elapsed = Math.floor((endTime - startTime) / 1000);
+    const timeTakenStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+    let score = 0;
+    questions.forEach((q, i) => {
+        const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
+        const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
+        if (JSON.stringify(correct) === JSON.stringify(user)) score++;
+    });
+    const percentage = ((score / questions.length) * 100).toFixed(1);
+    
+    resultDetails.innerHTML = `<p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>`;
+    resultModal.style.display = 'flex';
+    
+    // Append score to history
+    appendToPermanentLog(`[RESULT] ${new Date().toLocaleString()} | Score: ${score}/${questions.length} (${percentage}%)`);
+    
+    renderNav(); renderQuestion(); 
+}
+
+/**
+ * EXISTING FUNCTIONS (UNCHANGED)
  */
 function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
-
 function parseQuestions(rawText, shouldInit = true) {
     const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
     const chunks = cleanText.split(/(?=\n\s*\d+\.)|(?=^\s*\d+\.)/g);
@@ -97,9 +174,7 @@ function parseQuestions(rawText, shouldInit = true) {
                 }
                 if (optText) options.push(optText);
             }
-            if (options.length > 0) {
-                questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
-            }
+            if (options.length > 0) questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
         }
     });
     if (shouldInit && questions.length > 0) initQuiz();
@@ -176,67 +251,15 @@ function startTimer(s) {
 }
 
 function stopTimer() { clearInterval(timerInterval); timerDisplay.innerText = "00:00"; }
-
-/**
- * CALCULATE & APPEND DATA
- */
-function calculateResult(auto) {
-    isSubmitted = true; stopTimer();
-    const endTime = Date.now();
-    const elapsed = Math.floor((endTime - startTime) / 1000);
-    const timeTakenStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
-    let score = 0;
-    questions.forEach((q, i) => {
-        const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
-        const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
-        if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
-    });
-    const percentage = ((score / questions.length) * 100).toFixed(1);
-    resultDetails.innerHTML = `<div style="text-align: left; line-height: 1.8;"><p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
-    resultModal.style.display = 'flex';
-    
-    // APPEND SCORE DATA
-    appendToPermanentLog(`[RESULT] ${new Date().toLocaleString()} | Score: ${score}/${questions.length} (${percentage}%) | Time: ${timeTakenStr}`);
-    
-    renderNav(); renderQuestion(); 
-}
-
 function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
 
-/**
- * PERMANENT LOGGING SYSTEM (APPEND ONLY)
- */
-async function trackVisitors() {
-    try {
-        const response = await fetch('https://ipapi.co/json/');
-        const data = await response.json();
-        const entry = `[VISIT] ${new Date().toLocaleString()} | IP: ${data.ip} | City: ${data.city} | Device: ${navigator.platform}`;
-        appendToPermanentLog(entry);
-    } catch (e) {
-        appendToPermanentLog(`[VISIT] ${new Date().toLocaleString()} | Connection: Unknown Device`);
-    }
-}
-
-function appendToPermanentLog(newEntry) {
-    // Get existing logs from localStorage
-    let existingLogs = localStorage.getItem('master_visitor_log');
-    
-    // If no logs exist, start fresh; otherwise, add a new line (append)
-    let updatedLogs = existingLogs ? existingLogs + "\n" + newEntry : newEntry;
-    
-    // Save back to localStorage
-    localStorage.setItem('master_visitor_log', updatedLogs);
-    console.log("Logged: " + newEntry);
-}
-
 function saveLogsToTxt() {
     const fullData = localStorage.getItem('master_visitor_log');
-    if (!fullData) return alert("No history found yet.");
-    
+    if (!fullData) return alert("No history found.");
     const blob = new Blob([fullData], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `Permanent_History_Log.txt`;
+    link.download = `Visitor_History.txt`;
     link.click();
 }
