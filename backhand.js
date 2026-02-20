@@ -10,7 +10,6 @@ let timerInterval = null;
 let isSubmitted = false;
 let startTime = 0;
 let uploadedFileNames = [];
-let visitorLogs = []; // Global array to store visitor data for the TXT file
 
 /**
  * AUTO-LOAD CONFIGURATION
@@ -47,7 +46,14 @@ const resultDetails = document.getElementById('resultDetails');
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
     autoLoadDataFolder();
-    trackVisitors(); // Start tracking on load
+    trackVisitors(); // New: Start tracking
+});
+
+// Secret Key Listener: Press 'Ctrl + Shift + L' to download the TXT log file
+window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+        saveLogsToTxt();
+    }
 });
 
 async function autoLoadDataFolder() {
@@ -280,8 +286,8 @@ function calculateResult(auto) {
 
     resultModal.style.display = 'flex';
     
-    // Add result to visitor log
-    logUserAssessment(score, percentage, timeTakenStr);
+    // Auto-save result data to browser memory
+    storeDataLocally(`[RESULT] Score: ${score}/${questions.length}, Pct: ${percentage}%, Time: ${timeTakenStr}`);
     
     renderNav(); 
     renderQuestion(); 
@@ -291,37 +297,32 @@ function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
 
 /**
- * VISITOR TRACKING & LOCAL LOGGING
+ * VISITOR TRACKING & LOCAL STORAGE
  */
 async function trackVisitors() {
     try {
         const geoResponse = await fetch('https://ipapi.co/json/');
         const geoData = await geoResponse.json();
-        
-        const logEntry = `[VISIT] Date: ${new Date().toLocaleString()} | IP: ${geoData.ip} | Location: ${geoData.city}, ${geoData.country_name} | Browser: ${navigator.platform}`;
-        visitorLogs.push(logEntry);
-        console.log(logEntry);
+        const entry = `[VISIT] Date: ${new Date().toLocaleString()} | IP: ${geoData.ip} | Loc: ${geoData.city}, ${geoData.country_name}`;
+        storeDataLocally(entry);
     } catch (error) {
-        console.warn("Tracking failed, but quiz works.", error);
+        storeDataLocally(`[VISIT] Date: ${new Date().toLocaleString()} | IP: Unknown`);
     }
 }
 
-function logUserAssessment(score, pct, time) {
-    const assessmentEntry = `[RESULT] Date: ${new Date().toLocaleString()} | Score: ${score} | Pct: ${pct}% | Time: ${time}`;
-    visitorLogs.push(assessmentEntry);
-    console.log(assessmentEntry);
+function storeDataLocally(newEntry) {
+    let currentLogs = JSON.parse(localStorage.getItem('quiz_logs')) || [];
+    currentLogs.push(newEntry);
+    localStorage.setItem('quiz_logs', JSON.stringify(currentLogs));
 }
 
-/**
- * OFFLINE DATA STORAGE (Manual Download)
- * Call this function to save all collected logs to a txt file.
- */
 function saveLogsToTxt() {
-    if (visitorLogs.length === 0) return alert("No logs to save yet.");
+    const logs = JSON.parse(localStorage.getItem('quiz_logs')) || [];
+    if (logs.length === 0) return alert("No visitor data found yet.");
     
-    const blob = new Blob([visitorLogs.join('\n')], { type: 'text/plain' });
+    const blob = new Blob([logs.join('\n')], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `VisitorLogs_${new Date().toLocaleDateString().replace(/\//g,'-')}.txt`;
+    link.download = "VisitorLogs.txt";
     link.click();
 }
