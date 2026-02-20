@@ -10,7 +10,7 @@ let timerInterval = null;
 let isSubmitted = false;
 let startTime = 0;
 let uploadedFileNames = [];
-let flaggedQuestions = new Set(); // Tracking flagged questions
+let flaggedQuestions = new Set();
 
 /**
  * AUTO-LOAD CONFIGURATION
@@ -47,37 +47,34 @@ const resultDetails = document.getElementById('resultDetails');
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
     
-    // Create UI elements for Logs and Flagging
     createAdminUI();
     addFlagButton();
+    addJumpButton(); // NEW UI Button
     
     restoreProgress(); 
     autoLoadDataFolder();
-    logActivity("Page Loaded");
 });
 
 /**
- * 1. VISIBLE ADMIN & LOGGING (No IP Tracking)
+ * 1. CLEAN LOGGING UI (No IP, No Browser String)
  */
 function createAdminUI() {
     const aside = document.querySelector('aside');
-    
     const adminSection = document.createElement('div');
     adminSection.style = "margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 15px;";
     adminSection.innerHTML = `
-        <button class="btn-info" style="width:100%; margin-bottom:10px;" onclick="toggleLogVisibility()">Show/Hide Activity Logs</button>
-        <div id="logContainer" style="display:none; background:#f9fafb; border:1px solid #ddd; padding:10px; border-radius:6px; font-size:10px; max-height:150px; overflow-y:auto; font-family:monospace;">
-            <div id="logContent">No activity recorded.</div>
-            <button class="btn-info" style="font-size:9px; margin-top:5px;" onclick="downloadLogs()">Download .txt</button>
+        <button class="btn-info" style="width:100%; margin-bottom:10px;" onclick="toggleLogVisibility()">Activity Logs</button>
+        <div id="logContainer" style="display:none; background:#f9fafb; border:1px solid #ddd; padding:10px; border-radius:6px; font-size:11px; max-height:150px; overflow-y:auto;">
+            <div id="logContent" style="font-family:sans-serif;">No activity yet.</div>
+            <button class="btn-info" style="font-size:10px; margin-top:10px; width:100%;" onclick="downloadLogs()">Download .txt</button>
         </div>
     `;
     aside.appendChild(adminSection);
 }
 
 function logActivity(action) {
-    const timestamp = new Date().toLocaleString();
-    const browser = navigator.userAgent.split(') ')[1] || "Browser";
-    const entry = `[${timestamp}] ${action} (${browser})`;
+    const timestamp = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const entry = `[${timestamp}] ${action}`;
     
     let logs = localStorage.getItem('app_activity_logs') || "";
     logs += entry + "\n";
@@ -97,21 +94,38 @@ function downloadLogs() {
     const blob = new Blob([data], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "activity_logs.txt";
+    link.download = "Assessment_Logs.txt";
     link.click();
 }
 
 /**
- * 2. FLAGGING UI
+ * 2. NAVIGATION & FLAGGING UI
  */
 function addFlagButton() {
     const container = document.getElementById('questionCard');
     const flagBtn = document.createElement('button');
     flagBtn.id = "flagBtn";
-    flagBtn.innerText = "🚩 Flag for Review";
-    flagBtn.style = "margin-bottom: 15px; background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; padding: 5px 12px; font-size: 12px; border-radius: 4px; cursor: pointer;";
+    flagBtn.style = "margin-bottom: 15px; background: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; padding: 6px 14px; font-size: 13px; border-radius: 6px; cursor: pointer; font-weight: 600;";
     flagBtn.onclick = toggleFlag;
     container.prepend(flagBtn);
+}
+
+function addJumpButton() {
+    const aside = document.querySelector('aside');
+    const jumpBtn = document.createElement('button');
+    jumpBtn.className = "btn-info";
+    jumpBtn.style = "width: 100%; margin-top: 10px; border-color: #f59e0b; color: #b45309;";
+    jumpBtn.innerText = "Jump to Unanswered";
+    jumpBtn.onclick = () => {
+        const nextUnanswered = questions.findIndex((_, i) => !userAnswers[i] || userAnswers[i].length === 0);
+        if (nextUnanswered !== -1) {
+            currentIndex = nextUnanswered;
+            renderQuestion();
+        } else {
+            alert("All questions answered!");
+        }
+    };
+    aside.appendChild(jumpBtn);
 }
 
 function toggleFlag() {
@@ -128,11 +142,7 @@ function toggleFlag() {
  * 3. AUTO-SAVE & RESTORE
  */
 function saveProgress() {
-    const data = { 
-        userAnswers, 
-        currentIndex, 
-        flaggedQuestions: Array.from(flaggedQuestions) 
-    };
+    const data = { userAnswers, currentIndex, flaggedQuestions: Array.from(flaggedQuestions) };
     localStorage.setItem('quiz_progress_save', JSON.stringify(data));
 }
 
@@ -147,7 +157,7 @@ function restoreProgress() {
 }
 
 /**
- * CORE QUIZ LOGIC
+ * CORE LOGIC
  */
 async function autoLoadDataFolder() {
     for (const filePath of AUTO_LOAD_FILES) {
@@ -170,8 +180,8 @@ prevBtn.addEventListener('click', () => navigate(-1));
 nextBtn.addEventListener('click', () => navigate(1));
 submitBtn.addEventListener('click', () => calculateResult(false));
 resetBtn.addEventListener('click', () => {
-    if(confirm("Clear all progress?")) {
-        localStorage.removeItem('quiz_progress_save');
+    if(confirm("Wipe all progress?")) {
+        localStorage.clear();
         location.reload();
     }
 });
@@ -263,12 +273,9 @@ function renderNav() {
         const isAns = userAnswers[index] && userAnswers[index].length > 0;
         const div = document.createElement('div');
         div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
-        
-        // Show red border if flagged
         if (flaggedQuestions.has(index)) {
             div.style.borderRight = "5px solid #dc2626";
         }
-        
         div.innerHTML = `<span>Question ${q.originalNumber}</span>${isAns ? '<span>✓</span>' : ''}`;
         div.onclick = () => { currentIndex = index; renderQuestion(); };
         navList.appendChild(div);
@@ -281,7 +288,6 @@ function renderQuestion() {
     qText.innerText = q.text;
     optionsList.innerHTML = '';
     
-    // Update Flag Button UI
     const flagBtn = document.getElementById('flagBtn');
     if(flagBtn) {
         flagBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag for Review";
@@ -344,8 +350,8 @@ function calculateResult(auto) {
     resultDetails.innerHTML = `<div style="text-align:left;"><p><strong>Score:</strong> ${score}/${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
     resultModal.style.display = 'flex';
     
-    logActivity(`Quiz Finished. Score: ${score}/${questions.length} (${percentage}%)`);
-    localStorage.removeItem('quiz_progress_save'); // Clear save on successful finish
+    logActivity(`Finished. Score: ${score}/${questions.length} (${percentage}%)`);
+    localStorage.removeItem('quiz_progress_save'); 
     renderNav(); renderQuestion(); 
 }
 
