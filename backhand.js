@@ -1,5 +1,5 @@
 /**
- * GLOBAL STATE (Original + New Extensions)
+ * GLOBAL STATE
  */
 let questions = [];
 let currentIndex = 0;
@@ -10,7 +10,7 @@ let timerInterval = null;
 let isSubmitted = false;
 let startTime = 0;
 let uploadedFileNames = [];
-let flaggedQuestions = new Set(); // NEW: Tracking flags
+let flaggedQuestions = new Set(); // Tracking flagged questions
 
 /**
  * AUTO-LOAD CONFIGURATION
@@ -42,73 +42,102 @@ const resultModal = document.getElementById('resultModal');
 const resultDetails = document.getElementById('resultDetails');
 
 /**
- * INITIALIZATION & RESTORE
+ * INITIALIZATION
  */
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
-    createHiddenAdminPanel();
+    
+    // Create UI elements for Logs and Flagging
+    createAdminUI();
+    addFlagButton();
+    
     restoreProgress(); 
     autoLoadDataFolder();
-    captureVisitorData();
+    logActivity("Page Loaded");
 });
 
 /**
- * 1. REAL-TIME ADMIN PANEL & VISITOR LOGGING
+ * 1. VISIBLE ADMIN & LOGGING (No IP Tracking)
  */
-function createHiddenAdminPanel() {
-    const panel = document.createElement('div');
-    panel.id = 'realtimeAdminPanel';
-    panel.style = `display:none; position:fixed; bottom:0; left:0; right:0; background:#0f172a; color:#38bdf8; font-family:monospace; font-size:12px; padding:15px; max-height:40vh; overflow-y:auto; z-index:10000; border-top:2px solid #38bdf8;`;
-    panel.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <strong style="color:white;">LIVE LOGS (Alt+Ctrl+Shift+L)</strong>
-            <button onclick="downloadMasterLog()" style="background:#38bdf8; border:none; padding:4px 8px; cursor:pointer; border-radius:4px;">DOWNLOAD TXT</button>
+function createAdminUI() {
+    const aside = document.querySelector('aside');
+    
+    const adminSection = document.createElement('div');
+    adminSection.style = "margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 15px;";
+    adminSection.innerHTML = `
+        <button class="btn-info" style="width:100%; margin-bottom:10px;" onclick="toggleLogVisibility()">Show/Hide Activity Logs</button>
+        <div id="logContainer" style="display:none; background:#f9fafb; border:1px solid #ddd; padding:10px; border-radius:6px; font-size:10px; max-height:150px; overflow-y:auto; font-family:monospace;">
+            <div id="logContent">No activity recorded.</div>
+            <button class="btn-info" style="font-size:9px; margin-top:5px;" onclick="downloadLogs()">Download .txt</button>
         </div>
-        <div id="liveLogContent" style="white-space:pre-wrap;">Initializing...</div>`;
-    document.body.appendChild(panel);
-    updatePanelUI();
+    `;
+    aside.appendChild(adminSection);
 }
 
-async function captureVisitorData() {
-    try {
-        const response = await fetch('https://api.ipify.org?format=json');
-        const data = await response.json();
-        const entry = `[VISIT] Date: ${new Date().toLocaleString()} | IP: ${data.ip} | Browser: ${navigator.userAgent.split(') ')[1]}`;
-        appendAndRefresh(entry);
-    } catch (err) { appendAndRefresh(`[VISIT] Date: ${new Date().toLocaleString()} | IP: Private`); }
+function logActivity(action) {
+    const timestamp = new Date().toLocaleString();
+    const browser = navigator.userAgent.split(') ')[1] || "Browser";
+    const entry = `[${timestamp}] ${action} (${browser})`;
+    
+    let logs = localStorage.getItem('app_activity_logs') || "";
+    logs += entry + "\n";
+    localStorage.setItem('app_activity_logs', logs);
+    
+    const logContent = document.getElementById('logContent');
+    if(logContent) logContent.innerText = logs;
 }
 
-function appendAndRefresh(entry) {
-    let logs = localStorage.getItem('master_visitor_log') || "";
-    logs += entry + "\n------------------------------------------------\n";
-    localStorage.setItem('master_visitor_log', logs);
-    updatePanelUI();
+function toggleLogVisibility() {
+    const logBox = document.getElementById('logContainer');
+    logBox.style.display = logBox.style.display === 'none' ? 'block' : 'none';
 }
 
-function updatePanelUI() {
-    const logBox = document.getElementById('liveLogContent');
-    if (logBox) logBox.innerText = localStorage.getItem('master_visitor_log') || "No activity.";
-}
-
-function downloadMasterLog() {
-    const data = localStorage.getItem('master_visitor_log');
+function downloadLogs() {
+    const data = localStorage.getItem('app_activity_logs');
     const blob = new Blob([data], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "Quiz_Visitor_Log.txt";
+    link.download = "activity_logs.txt";
     link.click();
 }
 
 /**
- * 2. AUTO-SAVE & KEYBOARD SHORTCUTS
+ * 2. FLAGGING UI
+ */
+function addFlagButton() {
+    const container = document.getElementById('questionCard');
+    const flagBtn = document.createElement('button');
+    flagBtn.id = "flagBtn";
+    flagBtn.innerText = "🚩 Flag for Review";
+    flagBtn.style = "margin-bottom: 15px; background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; padding: 5px 12px; font-size: 12px; border-radius: 4px; cursor: pointer;";
+    flagBtn.onclick = toggleFlag;
+    container.prepend(flagBtn);
+}
+
+function toggleFlag() {
+    if (flaggedQuestions.has(currentIndex)) {
+        flaggedQuestions.delete(currentIndex);
+    } else {
+        flaggedQuestions.add(currentIndex);
+    }
+    renderNav();
+    saveProgress();
+}
+
+/**
+ * 3. AUTO-SAVE & RESTORE
  */
 function saveProgress() {
-    const data = { userAnswers, currentIndex, currentMode, flaggedQuestions: Array.from(flaggedQuestions) };
-    localStorage.setItem('quiz_autosave', JSON.stringify(data));
+    const data = { 
+        userAnswers, 
+        currentIndex, 
+        flaggedQuestions: Array.from(flaggedQuestions) 
+    };
+    localStorage.setItem('quiz_progress_save', JSON.stringify(data));
 }
 
 function restoreProgress() {
-    const saved = localStorage.getItem('quiz_autosave');
+    const saved = localStorage.getItem('quiz_progress_save');
     if (saved) {
         const d = JSON.parse(saved);
         userAnswers = d.userAnswers || {};
@@ -117,23 +146,8 @@ function restoreProgress() {
     }
 }
 
-window.addEventListener('keydown', (e) => {
-    if (e.altKey && e.ctrlKey && e.shiftKey && e.key === 'L') {
-        const p = document.getElementById('realtimeAdminPanel');
-        p.style.display = p.style.display === 'none' ? 'block' : 'none';
-    }
-    if (e.key === 'ArrowRight' && !nextBtn.disabled) navigate(1);
-    if (e.key === 'ArrowLeft' && !prevBtn.disabled) navigate(-1);
-    if (e.key.toLowerCase() === 'f' && questionCard.style.display !== 'none') {
-        if (flaggedQuestions.has(currentIndex)) flaggedQuestions.delete(currentIndex);
-        else flaggedQuestions.add(currentIndex);
-        renderNav();
-        saveProgress();
-    }
-});
-
 /**
- * ORIGINAL CORE LOGIC
+ * CORE QUIZ LOGIC
  */
 async function autoLoadDataFolder() {
     for (const filePath of AUTO_LOAD_FILES) {
@@ -155,7 +169,12 @@ fileInput.addEventListener('change', handleFile);
 prevBtn.addEventListener('click', () => navigate(-1));
 nextBtn.addEventListener('click', () => navigate(1));
 submitBtn.addEventListener('click', () => calculateResult(false));
-resetBtn.addEventListener('click', () => { if(confirm("Clear all?")) { localStorage.removeItem('quiz_autosave'); initQuiz(); } });
+resetBtn.addEventListener('click', () => {
+    if(confirm("Clear all progress?")) {
+        localStorage.removeItem('quiz_progress_save');
+        location.reload();
+    }
+});
 
 modeSwitcher.addEventListener('change', (e) => {
     currentMode = e.target.value;
@@ -245,9 +264,10 @@ function renderNav() {
         const div = document.createElement('div');
         div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
         
-        // ADD VISUAL FLAG
-        let flagStyle = flaggedQuestions.has(index) ? 'border-right: 5px solid #dc2626;' : '';
-        div.style = flagStyle;
+        // Show red border if flagged
+        if (flaggedQuestions.has(index)) {
+            div.style.borderRight = "5px solid #dc2626";
+        }
         
         div.innerHTML = `<span>Question ${q.originalNumber}</span>${isAns ? '<span>✓</span>' : ''}`;
         div.onclick = () => { currentIndex = index; renderQuestion(); };
@@ -260,6 +280,14 @@ function renderQuestion() {
     qNumText.innerText = `Question ${currentIndex + 1} of ${questions.length}`;
     qText.innerText = q.text;
     optionsList.innerHTML = '';
+    
+    // Update Flag Button UI
+    const flagBtn = document.getElementById('flagBtn');
+    if(flagBtn) {
+        flagBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag for Review";
+        flagBtn.style.background = flaggedQuestions.has(currentIndex) ? "#fee2e2" : "#f3f4f6";
+    }
+
     const ansKeys = q.answer.match(/[A-G]/gi) || [];
     const isMulti = ansKeys.length > 1;
     q.options.forEach((opt, idx) => {
@@ -306,21 +334,18 @@ function calculateResult(auto) {
     isSubmitted = true; stopTimer();
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     const timeTakenStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
-    let score = 0, missed = [];
+    let score = 0;
     questions.forEach((q, i) => {
         const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
-        else missed.push(i + 1);
     });
     const percentage = ((score / questions.length) * 100).toFixed(1);
     resultDetails.innerHTML = `<div style="text-align:left;"><p><strong>Score:</strong> ${score}/${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
     resultModal.style.display = 'flex';
     
-    // LOG DEEP ANALYTICS
-    const scoreEntry = `[RESULT] Score: ${score}/${questions.length} (${percentage}%) | Time: ${timeTakenStr} | Missed IDs: ${missed.join(',')}`;
-    appendAndRefresh(scoreEntry);
-    localStorage.removeItem('quiz_autosave');
+    logActivity(`Quiz Finished. Score: ${score}/${questions.length} (${percentage}%)`);
+    localStorage.removeItem('quiz_progress_save'); // Clear save on successful finish
     renderNav(); renderQuestion(); 
 }
 
