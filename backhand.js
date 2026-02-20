@@ -45,66 +45,98 @@ const resultDetails = document.getElementById('resultDetails');
  */
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
+    
+    // 1. Create the Hidden UI Panel
+    createHiddenAdminPanel();
+    
+    // 2. Load Questions
     autoLoadDataFolder();
     
-    // DIRECT VISITOR TRACKING
+    // 3. Capture Visitor (Updates Panel Real-time)
     captureVisitorData();
 });
 
 /**
- * VISITOR TRACKING & DATA APPENDING (DIRECT CODE)
+ * REAL-TIME ADMIN PANEL UI
  */
-async function captureVisitorData() {
-    try {
-        // 1. Get IP Address
-        const response = await fetch('https://api.ipify.org?format=json');
-        const data = await response.json();
-        const userIP = data.ip;
+function createHiddenAdminPanel() {
+    const panel = document.createElement('div');
+    panel.id = 'realtimeAdminPanel';
+    // Style: Hidden by default, dark theme, fixed at bottom
+    panel.style = `
+        display: none; 
+        position: fixed; bottom: 0; left: 0; right: 0; 
+        background: #0f172a; color: #38bdf8; 
+        font-family: 'Courier New', monospace; font-size: 12px; 
+        padding: 15px; max-height: 40vh; overflow-y: auto; 
+        z-index: 10000; border-top: 2px solid #38bdf8;
+        box-shadow: 0 -10px 25px rgba(0,0,0,0.5);
+    `;
+    panel.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom: 1px solid #1e293b; padding-bottom:5px;">
+            <strong style="color:#f8fafc;">LIVE SYSTEM LOGS (Alt+Ctrl+Shift+L to Close)</strong>
+            <button onclick="downloadMasterLog()" style="background:#38bdf8; color:#0f172a; border:none; padding:4px 10px; cursor:pointer; font-weight:bold; border-radius:4px;">DOWNLOAD .TXT</button>
+        </div>
+        <div id="liveLogContent" style="white-space: pre-wrap;">Initializing system logs...</div>
+    `;
+    document.body.appendChild(panel);
+    updatePanelUI(); // Load existing logs
+}
 
-        // 2. Get Browser and Date
-        const date = new Date().toLocaleString();
-        const browser = navigator.userAgent;
-        
-        // 3. Create the Log Entry
-        const newEntry = `[VISIT] Date: ${date} | IP: ${userIP} | Browser: ${browser}`;
+// Toggle Visibility Shortcut
+window.addEventListener('keydown', (e) => {
+    if (e.altKey && e.ctrlKey && e.shiftKey && e.key === 'L') {
+        const panel = document.getElementById('realtimeAdminPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+});
 
-        // 4. APPEND LOGIC: Read old data, add new line, save back
-        let masterLog = localStorage.getItem('master_visitor_log') || "";
-        masterLog += newEntry + "\n------------------------------------------------\n";
-        
-        localStorage.setItem('master_visitor_log', masterLog);
-        console.log("Visitor data appended to storage.");
-    } catch (err) {
-        console.error("Tracking failed:", err);
+function updatePanelUI() {
+    const logBox = document.getElementById('liveLogContent');
+    if (logBox) {
+        logBox.innerText = localStorage.getItem('master_visitor_log') || "No activity yet.";
+        // Auto-scroll to bottom
+        const panel = document.getElementById('realtimeAdminPanel');
+        panel.scrollTop = panel.scrollHeight;
     }
 }
 
 /**
- * SECRET COMMAND: Alt + Ctrl + Shift + L
- * Downloads the accumulated history as a .txt file
+ * VISITOR TRACKING (REAL-TIME APPEND)
  */
-window.addEventListener('keydown', (e) => {
-    if (e.altKey && e.ctrlKey && e.shiftKey && e.key === 'L') {
-        const fullHistory = localStorage.getItem('master_visitor_log');
+async function captureVisitorData() {
+    try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        const entry = `[VISIT] Date: ${new Date().toLocaleString()} | IP: ${data.ip} | Browser: ${navigator.userAgent.split(') ')[1]}`;
         
-        if (!fullHistory) {
-            alert("No visitor data recorded yet.");
-            return;
-        }
-
-        const blob = new Blob([fullHistory], { type: 'text/plain' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Visitor_History_${new Date().toLocaleDateString().replace(/\//g,'-')}.txt`;
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        appendAndRefresh(entry);
+    } catch (err) {
+        appendAndRefresh(`[VISIT] Date: ${new Date().toLocaleString()} | IP: Offline/Blocked`);
     }
-});
+}
+
+function appendAndRefresh(entry) {
+    let logs = localStorage.getItem('master_visitor_log') || "";
+    logs += entry + "\n------------------------------------------------\n";
+    localStorage.setItem('master_visitor_log', logs);
+    
+    // Update the UI immediately
+    updatePanelUI();
+}
+
+function downloadMasterLog() {
+    const data = localStorage.getItem('master_visitor_log');
+    if (!data) return alert("Empty log.");
+    const blob = new Blob([data], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = "Live_Visitor_History.txt";
+    link.click();
+}
 
 /**
- * ORIGINAL QUIZ LOGIC FUNCTIONS
+ * ORIGINAL QUIZ LOGIC
  */
 async function autoLoadDataFolder() {
     for (const filePath of AUTO_LOAD_FILES) {
@@ -281,10 +313,9 @@ function calculateResult(auto) {
     resultDetails.innerHTML = `<div style="text-align: left;"><p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
     resultModal.style.display = 'flex';
     
-    // APPEND SCORE TO LOG
+    // REAL-TIME LOG RESULT
     const scoreEntry = `[RESULT] Date: ${new Date().toLocaleString()} | Score: ${score}/${questions.length} (${percentage}%) | Time: ${timeTakenStr}`;
-    let history = localStorage.getItem('master_visitor_log') || "";
-    localStorage.setItem('master_visitor_log', history + scoreEntry + "\n------------------------------------------------\n");
+    appendAndRefresh(scoreEntry);
     
     renderNav(); renderQuestion(); 
 }
