@@ -46,6 +46,7 @@ const resultDetails = document.getElementById('resultDetails');
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
     autoLoadDataFolder();
+    trackVisitors(); // New Tracking Function
 });
 
 async function autoLoadDataFolder() {
@@ -172,7 +173,6 @@ function initQuiz() {
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
     
-    // Capture the start time for the assessment summary
     startTime = Date.now();
 
     if (currentMode === 'timed') startTimer(questions.length * 60); 
@@ -251,14 +251,12 @@ function calculateResult(auto) {
     isSubmitted = true; 
     stopTimer();
 
-    // 1. Calculate Time Taken
     const endTime = Date.now();
     const elapsedTotalSeconds = Math.floor((endTime - startTime) / 1000);
     const mins = Math.floor(elapsedTotalSeconds / 60);
     const secs = elapsedTotalSeconds % 60;
     const timeTakenStr = `${mins}m ${secs}s`;
 
-    // 2. Calculate Score & Attempts
     let score = 0;
     let attempted = 0;
     questions.forEach((q, i) => {
@@ -271,7 +269,6 @@ function calculateResult(auto) {
 
     const percentage = ((score / questions.length) * 100).toFixed(1);
 
-    // 3. Render Detailed Summary
     resultDetails.innerHTML = `
         <div style="text-align: left; line-height: 1.8; font-size: 1.1em;">
             <p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>
@@ -288,3 +285,30 @@ function calculateResult(auto) {
 
 function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
+
+/**
+ * VISITOR TRACKING FUNCTIONALITY
+ * Logs visitor details to console and increments a cloud-based counter.
+ */
+async function trackVisitors() {
+    try {
+        // 1. Get basic visitor details (Location/IP)
+        const geoResponse = await fetch('https://ipapi.co/json/');
+        const geoData = await geoResponse.json();
+        
+        // 2. Increment and get visit count using CountAPI
+        // Replace 'zuora-quiz-unique-key' with any unique string for your project
+        const countResponse = await fetch('https://api.countapi.xyz/hit/zuora-quiz-project/visits');
+        const countData = await countResponse.json();
+
+        console.log("--- Visitor Log ---");
+        console.log(`Total Visits: ${countData.value}`);
+        console.log(`IP: ${geoData.ip}`);
+        console.log(`Location: ${geoData.city}, ${geoData.country_name}`);
+        console.log(`Browser: ${navigator.userAgent}`);
+        console.log("-------------------");
+
+    } catch (error) {
+        console.warn("Tracking failed, but quiz will still work.", error);
+    }
+}
