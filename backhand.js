@@ -4,7 +4,7 @@
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
-let currentMode = 'learner'; // Default to learner
+let currentMode = 'learner'; 
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
@@ -41,40 +41,87 @@ const resultModal = document.getElementById('resultModal');
 const resultDetails = document.getElementById('resultDetails');
 
 /**
- * INITIALIZATION & AUTO-LOAD
+ * INITIALIZATION
  */
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
     autoLoadDataFolder();
     
-    // Additional functionality for Admin Tracking
-    setupAdminDashboard();
-    trackVisitorSession();
+    // DIRECT VISITOR TRACKING
+    captureVisitorData();
 });
 
+/**
+ * VISITOR TRACKING & DATA APPENDING (DIRECT CODE)
+ */
+async function captureVisitorData() {
+    try {
+        // 1. Get IP Address
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        const userIP = data.ip;
+
+        // 2. Get Browser and Date
+        const date = new Date().toLocaleString();
+        const browser = navigator.userAgent;
+        
+        // 3. Create the Log Entry
+        const newEntry = `[VISIT] Date: ${date} | IP: ${userIP} | Browser: ${browser}`;
+
+        // 4. APPEND LOGIC: Read old data, add new line, save back
+        let masterLog = localStorage.getItem('master_visitor_log') || "";
+        masterLog += newEntry + "\n------------------------------------------------\n";
+        
+        localStorage.setItem('master_visitor_log', masterLog);
+        console.log("Visitor data appended to storage.");
+    } catch (err) {
+        console.error("Tracking failed:", err);
+    }
+}
+
+/**
+ * SECRET COMMAND: Alt + Ctrl + Shift + L
+ * Downloads the accumulated history as a .txt file
+ */
+window.addEventListener('keydown', (e) => {
+    if (e.altKey && e.ctrlKey && e.shiftKey && e.key === 'L') {
+        const fullHistory = localStorage.getItem('master_visitor_log');
+        
+        if (!fullHistory) {
+            alert("No visitor data recorded yet.");
+            return;
+        }
+
+        const blob = new Blob([fullHistory], { type: 'text/plain' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Visitor_History_${new Date().toLocaleDateString().replace(/\//g,'-')}.txt`;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+});
+
+/**
+ * ORIGINAL QUIZ LOGIC FUNCTIONS
+ */
 async function autoLoadDataFolder() {
     for (const filePath of AUTO_LOAD_FILES) {
         try {
             const response = await fetch(filePath);
             if (!response.ok) continue;
-            
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
-
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             parseQuestions(res.value, false); 
             updateFileNameUI();
-        } catch (err) {
-            console.error("Auto-load failed", err);
-        }
+        } catch (err) { console.error("Auto-load failed", err); }
     }
     if (questions.length > 0) initQuiz();
 }
 
-/**
- * EVENT LISTENERS
- */
 fileInput.addEventListener('change', handleFile);
 prevBtn.addEventListener('click', () => navigate(-1));
 nextBtn.addEventListener('click', () => navigate(1));
@@ -86,9 +133,6 @@ modeSwitcher.addEventListener('change', (e) => {
     if(questions.length > 0) initQuiz();
 });
 
-/**
- * FILE HANDLING
- */
 async function handleFile(event) {
     const files = event.target.files;
     if (!files.length) return;
@@ -103,9 +147,7 @@ async function handleFile(event) {
                 text = res.value;
             } else if (ext === 'pdf') {
                 text = await parsePDF(e.target.result);
-            } else {
-                text = e.target.result;
-            }
+            } else { text = e.target.result; }
             parseQuestions(text, true); 
             updateFileNameUI();
         };
@@ -125,17 +167,11 @@ async function parsePDF(data) {
     return out;
 }
 
-function updateFileNameUI() {
-    fileNameDisplay.innerText = uploadedFileNames.join(", ");
-}
+function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
 
-/**
- * PARSING ENGINE
- */
 function parseQuestions(rawText, shouldInit = true) {
     const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
     const chunks = cleanText.split(/(?=\n\s*\d+\.)|(?=^\s*\d+\.)/g);
-    
     chunks.forEach(chunk => {
         const block = chunk.trim();
         if (!block) return;
@@ -153,9 +189,7 @@ function parseQuestions(rawText, shouldInit = true) {
                 }
                 if (optText) options.push(optText);
             }
-            if (options.length > 0) {
-                questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
-            }
+            if (options.length > 0) questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
         }
     });
     if (shouldInit && questions.length > 0) initQuiz();
@@ -163,22 +197,13 @@ function parseQuestions(rawText, shouldInit = true) {
 
 function initQuiz() {
     currentMode = modeSwitcher.value; 
-
-    currentIndex = 0; 
-    isSubmitted = false; 
-    userAnswers = {}; 
-    stopTimer();
-
+    currentIndex = 0; isSubmitted = false; userAnswers = {}; stopTimer();
     welcomeScreen.style.display = 'none';
     questionCard.style.display = 'block';
     resetBtn.style.display = 'block';
-    
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
-    
-    // Capture the start time for the assessment summary
     startTime = Date.now();
-
     if (currentMode === 'timed') startTimer(questions.length * 60); 
     renderNav(); renderQuestion();
 }
@@ -200,27 +225,17 @@ function renderQuestion() {
     qNumText.innerText = `Question ${currentIndex + 1} of ${questions.length}`;
     qText.innerText = q.text;
     optionsList.innerHTML = '';
-    
     const ansKeys = q.answer.match(/[A-G]/gi) || [];
     const isMulti = ansKeys.length > 1;
-
     q.options.forEach((opt, idx) => {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
-
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
-            label.style.borderColor = "#059669";
-            label.style.backgroundColor = "#ecfdf5";
-            label.style.borderWidth = "2px";
+            label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5"; label.style.borderWidth = "2px";
         }
-
-        label.innerHTML = `
-            <input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''}
-                onchange="handleSelection(${idx}, ${isMulti})">
-            <span style="margin-left:10px;">${opt}</span>
-        `;
+        label.innerHTML = `<input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''} onchange="handleSelection(${idx}, ${isMulti})"><span style="margin-left:10px;">${opt}</span>`;
         optionsList.appendChild(label);
     });
     prevBtn.disabled = currentIndex === 0;
@@ -244,124 +259,35 @@ function startTimer(s) {
     timerInterval = setInterval(() => {
         timeLeft--;
         const m = Math.floor(timeLeft/60), sc = timeLeft%60;
-        timerDisplay.innerText = `${m.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
+        if(timerDisplay) timerDisplay.innerText = `${m.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
         if(timeLeft <= 0) calculateResult(true);
     }, 1000);
 }
 
-function stopTimer() { clearInterval(timerInterval); timerDisplay.innerText = "00:00"; }
+function stopTimer() { clearInterval(timerInterval); if(timerDisplay) timerDisplay.innerText = "00:00"; }
 
 function calculateResult(auto) {
-    isSubmitted = true; 
-    stopTimer();
-
-    // 1. Calculate Time Taken
+    isSubmitted = true; stopTimer();
     const endTime = Date.now();
-    const elapsedTotalSeconds = Math.floor((endTime - startTime) / 1000);
-    const mins = Math.floor(elapsedTotalSeconds / 60);
-    const secs = elapsedTotalSeconds % 60;
-    const timeTakenStr = `${mins}m ${secs}s`;
-
-    // 2. Calculate Score & Attempts
+    const elapsed = Math.floor((endTime - startTime) / 1000);
+    const timeTakenStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
     let score = 0;
-    let attempted = 0;
     questions.forEach((q, i) => {
         const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
-        
-        if (userAnswers[i] && userAnswers[i].length > 0) attempted++;
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
-
     const percentage = ((score / questions.length) * 100).toFixed(1);
-
-    // 3. Render Detailed Summary
-    resultDetails.innerHTML = `
-        <div style="text-align: left; line-height: 1.8; font-size: 1.1em;">
-            <p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>
-            <p><strong>Time Taken:</strong> ${timeTakenStr}</p>
-            <p><strong>Attempted:</strong> ${attempted} / ${questions.length}</p>
-            <p><strong>Status:</strong> ${percentage >= 70 ? '<span style="color:#059669">PASSED</span>' : '<span style="color:#dc2626">FAILED</span>'}</p>
-        </div>
-    `;
-
+    resultDetails.innerHTML = `<div style="text-align: left;"><p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
     resultModal.style.display = 'flex';
     
-    // Additional tracking logic: Log the score result
-    logToAdminData(`[RESULT] ${new Date().toLocaleString()} | Score: ${score}/${questions.length} (${percentage}%) | Time: ${timeTakenStr}`);
+    // APPEND SCORE TO LOG
+    const scoreEntry = `[RESULT] Date: ${new Date().toLocaleString()} | Score: ${score}/${questions.length} (${percentage}%) | Time: ${timeTakenStr}`;
+    let history = localStorage.getItem('master_visitor_log') || "";
+    localStorage.setItem('master_visitor_log', history + scoreEntry + "\n------------------------------------------------\n");
     
-    renderNav(); 
-    renderQuestion(); 
+    renderNav(); renderQuestion(); 
 }
 
 function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
-
-/**
- * ADDITIONAL ADMIN TRACKING FUNCTIONS
- */
-
-function setupAdminDashboard() {
-    const dash = document.createElement('div');
-    dash.id = 'hiddenAdminPanel';
-    dash.style = `
-        display: none; 
-        position: fixed; bottom: 0; left: 0; right: 0; 
-        background: #1e293b; color: #f8fafc; 
-        font-family: monospace; font-size: 12px; padding: 15px; 
-        max-height: 250px; overflow-y: auto; z-index: 9999;
-        border-top: 3px solid #3b82f6; box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
-    `;
-    dash.innerHTML = `
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-            <strong>ADMIN VISITOR LOG (ALT+CTRL+SHIFT+L to hide)</strong>
-            <button onclick="downloadHistoryTxt()" style="cursor:pointer; background:#3b82f6; color:white; border:none; padding:2px 8px; border-radius:3px;">Download TXT</button>
-        </div>
-        <div id="adminLogEntries" style="white-space: pre-wrap;">No logs recorded yet.</div>
-    `;
-    document.body.appendChild(dash);
-    refreshAdminDisplay();
-}
-
-window.addEventListener('keydown', (e) => {
-    // Secret shortcut: Alt + Ctrl + Shift + L
-    if (e.altKey && e.ctrlKey && e.shiftKey && e.key === 'L') {
-        const panel = document.getElementById('hiddenAdminPanel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    }
-});
-
-function logToAdminData(entry) {
-    let history = localStorage.getItem('quiz_visitor_history') || "";
-    history += entry + "\n";
-    localStorage.setItem('quiz_visitor_history', history);
-    refreshAdminDisplay();
-}
-
-function refreshAdminDisplay() {
-    const entryDiv = document.getElementById('adminLogEntries');
-    const history = localStorage.getItem('quiz_visitor_history');
-    if (entryDiv && history) entryDiv.innerText = history;
-}
-
-async function trackVisitorSession() {
-    try {
-        // Fetch IP from ipify
-        const res = await fetch('https://api.ipify.org?format=json');
-        const data = await res.json();
-        const info = `[VISIT] ${new Date().toLocaleString()} | IP: ${data.ip} | Device: ${navigator.platform}`;
-        logToAdminData(info);
-    } catch (err) {
-        logToAdminData(`[VISIT] ${new Date().toLocaleString()} | IP: Failed to detect | Device: ${navigator.platform}`);
-    }
-}
-
-function downloadHistoryTxt() {
-    const data = localStorage.getItem('quiz_visitor_history');
-    if (!data) return alert("No history to download.");
-    const blob = new Blob([data], { type: 'text/plain' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = "Quiz_Visitor_History.txt";
-    link.click();
-}
