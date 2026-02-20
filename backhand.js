@@ -4,12 +4,13 @@
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
-let currentMode = 'learner'; // Default to learner
+let currentMode = 'learner'; 
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
 let startTime = 0;
 let uploadedFileNames = [];
+let visitorLogs = []; // Global array to store visitor data for the TXT file
 
 /**
  * AUTO-LOAD CONFIGURATION
@@ -46,7 +47,7 @@ const resultDetails = document.getElementById('resultDetails');
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
     autoLoadDataFolder();
-    trackVisitors(); // New Tracking Function
+    trackVisitors(); // Start tracking on load
 });
 
 async function autoLoadDataFolder() {
@@ -160,7 +161,6 @@ function parseQuestions(rawText, shouldInit = true) {
 
 function initQuiz() {
     currentMode = modeSwitcher.value; 
-
     currentIndex = 0; 
     isSubmitted = false; 
     userAnswers = {}; 
@@ -279,6 +279,10 @@ function calculateResult(auto) {
     `;
 
     resultModal.style.display = 'flex';
+    
+    // Add result to visitor log
+    logUserAssessment(score, percentage, timeTakenStr);
+    
     renderNav(); 
     renderQuestion(); 
 }
@@ -287,28 +291,37 @@ function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
 
 /**
- * VISITOR TRACKING FUNCTIONALITY
- * Logs visitor details to console and increments a cloud-based counter.
+ * VISITOR TRACKING & LOCAL LOGGING
  */
 async function trackVisitors() {
     try {
-        // 1. Get basic visitor details (Location/IP)
         const geoResponse = await fetch('https://ipapi.co/json/');
         const geoData = await geoResponse.json();
         
-        // 2. Increment and get visit count using CountAPI
-        // Replace 'zuora-quiz-unique-key' with any unique string for your project
-        const countResponse = await fetch('https://api.countapi.xyz/hit/zuora-quiz-project/visits');
-        const countData = await countResponse.json();
-
-        console.log("--- Visitor Log ---");
-        console.log(`Total Visits: ${countData.value}`);
-        console.log(`IP: ${geoData.ip}`);
-        console.log(`Location: ${geoData.city}, ${geoData.country_name}`);
-        console.log(`Browser: ${navigator.userAgent}`);
-        console.log("-------------------");
-
+        const logEntry = `[VISIT] Date: ${new Date().toLocaleString()} | IP: ${geoData.ip} | Location: ${geoData.city}, ${geoData.country_name} | Browser: ${navigator.platform}`;
+        visitorLogs.push(logEntry);
+        console.log(logEntry);
     } catch (error) {
-        console.warn("Tracking failed, but quiz will still work.", error);
+        console.warn("Tracking failed, but quiz works.", error);
     }
+}
+
+function logUserAssessment(score, pct, time) {
+    const assessmentEntry = `[RESULT] Date: ${new Date().toLocaleString()} | Score: ${score} | Pct: ${pct}% | Time: ${time}`;
+    visitorLogs.push(assessmentEntry);
+    console.log(assessmentEntry);
+}
+
+/**
+ * OFFLINE DATA STORAGE (Manual Download)
+ * Call this function to save all collected logs to a txt file.
+ */
+function saveLogsToTxt() {
+    if (visitorLogs.length === 0) return alert("No logs to save yet.");
+    
+    const blob = new Blob([visitorLogs.join('\n')], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `VisitorLogs_${new Date().toLocaleDateString().replace(/\//g,'-')}.txt`;
+    link.click();
 }
