@@ -41,15 +41,15 @@ const resultModal = document.getElementById('resultModal');
 const resultDetails = document.getElementById('resultDetails');
 
 /**
- * INITIALIZATION & AUTO-LOAD
+ * INITIALIZATION
  */
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
     autoLoadDataFolder();
-    trackVisitors(); // New: Start tracking
+    trackVisitors(); // Capture visitor info immediately
 });
 
-// Secret Key Listener: Press 'Ctrl + Shift + L' to download the TXT log file
+// SECRET SHORTCUT: Press Ctrl + Shift + L to download the full history TXT
 window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key === 'L') {
         saveLogsToTxt();
@@ -61,85 +61,25 @@ async function autoLoadDataFolder() {
         try {
             const response = await fetch(filePath);
             if (!response.ok) continue;
-            
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
-
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             parseQuestions(res.value, false); 
             updateFileNameUI();
-        } catch (err) {
-            console.error("Auto-load failed", err);
-        }
+        } catch (err) { console.error("Auto-load failed", err); }
     }
     if (questions.length > 0) initQuiz();
 }
 
 /**
- * EVENT LISTENERS
+ * PARSING & NAVIGATION
  */
-fileInput.addEventListener('change', handleFile);
-prevBtn.addEventListener('click', () => navigate(-1));
-nextBtn.addEventListener('click', () => navigate(1));
-submitBtn.addEventListener('click', () => calculateResult(false));
-resetBtn.addEventListener('click', resetQuizState);
+function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
 
-modeSwitcher.addEventListener('change', (e) => {
-    currentMode = e.target.value;
-    if(questions.length > 0) initQuiz();
-});
-
-/**
- * FILE HANDLING
- */
-async function handleFile(event) {
-    const files = event.target.files;
-    if (!files.length) return;
-    for (let file of files) {
-        if (!uploadedFileNames.includes(file.name)) uploadedFileNames.push(file.name);
-        const ext = file.name.split('.').pop().toLowerCase();
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            let text = "";
-            if (ext === 'docx' || ext === 'doc') {
-                const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
-                text = res.value;
-            } else if (ext === 'pdf') {
-                text = await parsePDF(e.target.result);
-            } else {
-                text = e.target.result;
-            }
-            parseQuestions(text, true); 
-            updateFileNameUI();
-        };
-        if (['pdf','docx','doc'].includes(ext)) reader.readAsArrayBuffer(file);
-        else reader.readAsText(file);
-    }
-}
-
-async function parsePDF(data) {
-    const pdf = await pdfjsLib.getDocument({data}).promise;
-    let out = "";
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        out += content.items.map(item => item.str).join(" ") + "\n";
-    }
-    return out;
-}
-
-function updateFileNameUI() {
-    fileNameDisplay.innerText = uploadedFileNames.join(", ");
-}
-
-/**
- * PARSING ENGINE
- */
 function parseQuestions(rawText, shouldInit = true) {
     const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
     const chunks = cleanText.split(/(?=\n\s*\d+\.)|(?=^\s*\d+\.)/g);
-    
     chunks.forEach(chunk => {
         const block = chunk.trim();
         if (!block) return;
@@ -167,20 +107,14 @@ function parseQuestions(rawText, shouldInit = true) {
 
 function initQuiz() {
     currentMode = modeSwitcher.value; 
-    currentIndex = 0; 
-    isSubmitted = false; 
-    userAnswers = {}; 
+    currentIndex = 0; isSubmitted = false; userAnswers = {}; 
     stopTimer();
-
     welcomeScreen.style.display = 'none';
     questionCard.style.display = 'block';
     resetBtn.style.display = 'block';
-    
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
-    
     startTime = Date.now();
-
     if (currentMode === 'timed') startTimer(questions.length * 60); 
     renderNav(); renderQuestion();
 }
@@ -202,27 +136,17 @@ function renderQuestion() {
     qNumText.innerText = `Question ${currentIndex + 1} of ${questions.length}`;
     qText.innerText = q.text;
     optionsList.innerHTML = '';
-    
     const ansKeys = q.answer.match(/[A-G]/gi) || [];
     const isMulti = ansKeys.length > 1;
-
     q.options.forEach((opt, idx) => {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
-
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
-            label.style.borderColor = "#059669";
-            label.style.backgroundColor = "#ecfdf5";
-            label.style.borderWidth = "2px";
+            label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5"; label.style.borderWidth = "2px";
         }
-
-        label.innerHTML = `
-            <input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''}
-                onchange="handleSelection(${idx}, ${isMulti})">
-            <span style="margin-left:10px;">${opt}</span>
-        `;
+        label.innerHTML = `<input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''} onchange="handleSelection(${idx}, ${isMulti})"><span style="margin-left:10px;">${opt}</span>`;
         optionsList.appendChild(label);
     });
     prevBtn.disabled = currentIndex === 0;
@@ -253,76 +177,66 @@ function startTimer(s) {
 
 function stopTimer() { clearInterval(timerInterval); timerDisplay.innerText = "00:00"; }
 
+/**
+ * CALCULATE & APPEND DATA
+ */
 function calculateResult(auto) {
-    isSubmitted = true; 
-    stopTimer();
-
+    isSubmitted = true; stopTimer();
     const endTime = Date.now();
-    const elapsedTotalSeconds = Math.floor((endTime - startTime) / 1000);
-    const mins = Math.floor(elapsedTotalSeconds / 60);
-    const secs = elapsedTotalSeconds % 60;
-    const timeTakenStr = `${mins}m ${secs}s`;
-
+    const elapsed = Math.floor((endTime - startTime) / 1000);
+    const timeTakenStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
     let score = 0;
-    let attempted = 0;
     questions.forEach((q, i) => {
         const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
-        
-        if (userAnswers[i] && userAnswers[i].length > 0) attempted++;
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
-
     const percentage = ((score / questions.length) * 100).toFixed(1);
-
-    resultDetails.innerHTML = `
-        <div style="text-align: left; line-height: 1.8; font-size: 1.1em;">
-            <p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>
-            <p><strong>Time Taken:</strong> ${timeTakenStr}</p>
-            <p><strong>Attempted:</strong> ${attempted} / ${questions.length}</p>
-            <p><strong>Status:</strong> ${percentage >= 70 ? '<span style="color:#059669">PASSED</span>' : '<span style="color:#dc2626">FAILED</span>'}</p>
-        </div>
-    `;
-
+    resultDetails.innerHTML = `<div style="text-align: left; line-height: 1.8;"><p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
     resultModal.style.display = 'flex';
     
-    // Auto-save result data to browser memory
-    storeDataLocally(`[RESULT] Score: ${score}/${questions.length}, Pct: ${percentage}%, Time: ${timeTakenStr}`);
+    // APPEND SCORE DATA
+    appendToPermanentLog(`[RESULT] ${new Date().toLocaleString()} | Score: ${score}/${questions.length} (${percentage}%) | Time: ${timeTakenStr}`);
     
-    renderNav(); 
-    renderQuestion(); 
+    renderNav(); renderQuestion(); 
 }
 
 function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
 function navigate(d) { currentIndex += d; renderQuestion(); }
 
 /**
- * VISITOR TRACKING & LOCAL STORAGE
+ * PERMANENT LOGGING SYSTEM (APPEND ONLY)
  */
 async function trackVisitors() {
     try {
-        const geoResponse = await fetch('https://ipapi.co/json/');
-        const geoData = await geoResponse.json();
-        const entry = `[VISIT] Date: ${new Date().toLocaleString()} | IP: ${geoData.ip} | Loc: ${geoData.city}, ${geoData.country_name}`;
-        storeDataLocally(entry);
-    } catch (error) {
-        storeDataLocally(`[VISIT] Date: ${new Date().toLocaleString()} | IP: Unknown`);
+        const response = await fetch('https://ipapi.co/json/');
+        const data = await response.json();
+        const entry = `[VISIT] ${new Date().toLocaleString()} | IP: ${data.ip} | City: ${data.city} | Device: ${navigator.platform}`;
+        appendToPermanentLog(entry);
+    } catch (e) {
+        appendToPermanentLog(`[VISIT] ${new Date().toLocaleString()} | Connection: Unknown Device`);
     }
 }
 
-function storeDataLocally(newEntry) {
-    let currentLogs = JSON.parse(localStorage.getItem('quiz_logs')) || [];
-    currentLogs.push(newEntry);
-    localStorage.setItem('quiz_logs', JSON.stringify(currentLogs));
+function appendToPermanentLog(newEntry) {
+    // Get existing logs from localStorage
+    let existingLogs = localStorage.getItem('master_visitor_log');
+    
+    // If no logs exist, start fresh; otherwise, add a new line (append)
+    let updatedLogs = existingLogs ? existingLogs + "\n" + newEntry : newEntry;
+    
+    // Save back to localStorage
+    localStorage.setItem('master_visitor_log', updatedLogs);
+    console.log("Logged: " + newEntry);
 }
 
 function saveLogsToTxt() {
-    const logs = JSON.parse(localStorage.getItem('quiz_logs')) || [];
-    if (logs.length === 0) return alert("No visitor data found yet.");
+    const fullData = localStorage.getItem('master_visitor_log');
+    if (!fullData) return alert("No history found yet.");
     
-    const blob = new Blob([logs.join('\n')], { type: 'text/plain' });
+    const blob = new Blob([fullData], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "VisitorLogs.txt";
+    link.download = `Permanent_History_Log.txt`;
     link.click();
 }
