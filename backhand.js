@@ -56,11 +56,8 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * HELP & SEARCH LOGIC
+ * SEARCH & MODAL LOGIC
  */
-helpBtn.addEventListener('click', () => helpModal.style.display = 'flex');
-guideBtn.addEventListener('click', () => formatModal.style.display = 'flex');
-
 searchBtn.addEventListener('click', () => {
     const term = searchInput.value.toLowerCase().trim();
     renderNav(term);
@@ -69,6 +66,9 @@ searchBtn.addEventListener('click', () => {
 searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') renderNav(searchInput.value.toLowerCase().trim());
 });
+
+helpBtn.addEventListener('click', () => helpModal.style.display = 'flex');
+guideBtn.addEventListener('click', () => formatModal.style.display = 'flex');
 
 window.addEventListener('click', (e) => {
     if (e.target === helpModal) helpModal.style.display = 'none';
@@ -82,6 +82,7 @@ window.addEventListener('click', (e) => {
 platformSelect.addEventListener('change', () => {
     localStorage.setItem('selected_platform', platformSelect.value);
     userAnswers = {}; flaggedQuestions = new Set(); currentIndex = 0;
+    searchInput.value = ""; // Clear search on platform change
     localStorage.removeItem('quiz_progress_save');
     handlePlatformChange();
 });
@@ -96,7 +97,6 @@ async function handlePlatformChange() {
     
     for (const filePath of filesToLoad) {
         try {
-            // Fetch with Cache Buster
             const response = await fetch(`${filePath}?t=${Date.now()}`);
             if (!response.ok) continue;
             const arrayBuffer = await response.arrayBuffer();
@@ -111,93 +111,8 @@ async function handlePlatformChange() {
 }
 
 /**
- * UI HELPERS
+ * PARSING LOGIC
  */
-function addFlagButton() {
-    const flagContainer = document.getElementById('flagContainer');
-    const flagBtn = document.createElement('button');
-    flagBtn.id = "flagBtn";
-    flagBtn.style = "margin-bottom: 15px; background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 14px; border-radius: 6px; cursor: pointer;";
-    flagBtn.onclick = toggleFlag;
-    flagContainer.appendChild(flagBtn);
-}
-
-function addJumpButton() {
-    const controls = document.getElementById('sidebarControls');
-    const jumpBtn = document.createElement('button');
-    jumpBtn.className = "btn-info";
-    jumpBtn.style = "width: 100%; margin-top: 10px; border-color: #f59e0b; color: #b45309;";
-    jumpBtn.innerText = "Jump to Unanswered";
-    jumpBtn.onclick = () => {
-        const next = questions.findIndex((_, i) => !userAnswers[i] || userAnswers[i].length === 0);
-        if (next !== -1) { currentIndex = next; renderQuestion(); }
-    };
-    controls.prepend(jumpBtn);
-}
-
-function toggleFlag() {
-    if (flaggedQuestions.has(currentIndex)) flaggedQuestions.delete(currentIndex);
-    else flaggedQuestions.add(currentIndex);
-    renderNav(searchInput.value.toLowerCase().trim());
-    saveProgress();
-}
-
-function saveProgress() {
-    const data = { userAnswers, currentIndex, flaggedQuestions: Array.from(flaggedQuestions) };
-    localStorage.setItem('quiz_progress_save', JSON.stringify(data));
-}
-
-function restoreProgress() {
-    const saved = localStorage.getItem('quiz_progress_save');
-    const savedPlat = localStorage.getItem('selected_platform');
-    if (savedPlat) platformSelect.value = savedPlat;
-    if (saved) {
-        const d = JSON.parse(saved);
-        userAnswers = d.userAnswers || {}; currentIndex = d.currentIndex || 0;
-        flaggedQuestions = new Set(d.flaggedQuestions || []);
-    }
-}
-
-/**
- * FILE HANDLING & PARSING
- */
-fileInput.addEventListener('change', handleFile);
-
-async function handleFile(event) {
-    const files = event.target.files;
-    for (let file of files) {
-        if (!uploadedFileNames.includes(file.name)) uploadedFileNames.push(file.name);
-        const ext = file.name.split('.').pop().toLowerCase();
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            let text = "";
-            if (ext === 'docx' || ext === 'doc') {
-                const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
-                text = res.value;
-            } else if (ext === 'pdf') {
-                text = await parsePDF(e.target.result);
-            } else { text = e.target.result; }
-            parseQuestions(text, true); 
-            updateFileNameUI();
-        };
-        if (['pdf','docx','doc'].includes(ext)) reader.readAsArrayBuffer(file);
-        else reader.readAsText(file);
-    }
-}
-
-async function parsePDF(data) {
-    const pdf = await pdfjsLib.getDocument({data}).promise;
-    let out = "";
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        out += content.items.map(item => item.str).join(" ") + "\n";
-    }
-    return out;
-}
-
-function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
-
 function parseQuestions(rawText, shouldInit = true) {
     const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
     const chunks = cleanText.split(/(?=\n\s*\d+\.)|(?=^\s*\d+\.)/g);
@@ -225,38 +140,40 @@ function parseQuestions(rawText, shouldInit = true) {
 }
 
 /**
- * CORE QUIZ ENGINE
+ * NAVIGATION RENDERER (WITH SEARCH FILTER)
  */
-function initQuiz() {
-    currentMode = modeSwitcher.value; 
-    currentIndex = Math.min(currentIndex, questions.length - 1);
-    isSubmitted = false; stopTimer();
-    welcomeScreen.style.display = 'none';
-    questionCard.style.display = 'block';
-    resetBtn.style.display = 'block';
-    submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
-    timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
-    startTime = Date.now();
-    if (currentMode === 'timed') startTimer(questions.length * 60); 
-    renderNav(); renderQuestion();
-}
-
 function renderNav(filter = "") {
     navList.innerHTML = '';
-    questions.forEach((q, index) => {
-        if (filter && !q.text.toLowerCase().includes(filter)) return;
+    let hasMatches = false;
 
+    questions.forEach((q, index) => {
+        const textToSearch = q.text.toLowerCase();
+        
+        // EXCLUSIVE FILTER: Hide if doesn't match search term
+        if (filter !== "" && !textToSearch.includes(filter)) return;
+
+        hasMatches = true;
         const isAns = userAnswers[index] && userAnswers[index].length > 0;
         const div = document.createElement('div');
         div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
+        
         if (flaggedQuestions.has(index)) div.style.borderRight = "4px solid #dc2626";
         
-        div.innerHTML = `<span>Q${q.originalNumber}</span> <span style="font-size: 0.7rem; color: #9ca3af; margin-left:5px;">${q.text.substring(0, 15)}...</span> ${isAns ? '<span>✓</span>' : ''}`;
+        const preview = q.text.substring(0, 20);
+        div.innerHTML = `<span>Q${q.originalNumber}</span> <span style="font-size:0.7rem; color:#9ca3af; margin-left:5px;">${preview}...</span> ${isAns ? '<span>✓</span>' : ''}`;
+        
         div.onclick = () => { currentIndex = index; renderQuestion(); };
         navList.appendChild(div);
     });
+
+    if (!hasMatches && filter !== "") {
+        navList.innerHTML = `<div style="text-align:center; padding:20px; color:#9ca3af; font-size:0.8rem;">No questions found for "${filter}"</div>`;
+    }
 }
 
+/**
+ * QUESTION RENDERING
+ */
 function renderQuestion() {
     const q = questions[currentIndex];
     if (!q) return;
@@ -283,9 +200,12 @@ function renderQuestion() {
         label.innerHTML = `<input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''} onchange="handleSelection(${idx}, ${isMulti})"><span style="margin-left:10px;">${opt}</span>`;
         optionsList.appendChild(label);
     });
+    
     prevBtn.disabled = currentIndex === 0;
     nextBtn.disabled = currentIndex === questions.length - 1;
     progressIndicator.innerText = `Progress: ${Math.round(((currentIndex + 1) / questions.length) * 100)}%`;
+    
+    // Maintain filter while navigating
     renderNav(searchInput.value.toLowerCase().trim());
 }
 
@@ -296,13 +216,73 @@ function handleSelection(idx, multi) {
         if (userAnswers[currentIndex].includes(idx)) userAnswers[currentIndex] = userAnswers[currentIndex].filter(i => i !== idx);
         else userAnswers[currentIndex].push(idx);
     } else userAnswers[currentIndex] = [idx];
-    renderNav(searchInput.value.toLowerCase().trim());
+    
     saveProgress();
+    renderNav(searchInput.value.toLowerCase().trim());
 }
 
 /**
- * TIMER & NAVIGATION
+ * UTILITIES & BUTTONS
  */
+function initQuiz() {
+    currentMode = modeSwitcher.value; 
+    currentIndex = Math.min(currentIndex, questions.length - 1);
+    isSubmitted = false;
+    welcomeScreen.style.display = 'none';
+    questionCard.style.display = 'block';
+    resetBtn.style.display = 'block';
+    submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
+    timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
+    startTime = Date.now();
+    if (currentMode === 'timed') startTimer(questions.length * 60); 
+    renderQuestion();
+}
+
+function addFlagButton() {
+    const flagContainer = document.getElementById('flagContainer');
+    const flagBtn = document.createElement('button');
+    flagBtn.id = "flagBtn";
+    flagBtn.style = "margin-bottom: 15px; background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 14px; border-radius: 6px; cursor: pointer;";
+    flagBtn.onclick = toggleFlag;
+    flagContainer.appendChild(flagBtn);
+}
+
+function addJumpButton() {
+    const controls = document.getElementById('sidebarControls');
+    const jumpBtn = document.createElement('button');
+    jumpBtn.className = "btn-info";
+    jumpBtn.style = "width: 100%; margin-top: 10px; border-color: #f59e0b; color: #b45309;";
+    jumpBtn.innerText = "Jump to Unanswered";
+    jumpBtn.onclick = () => {
+        const next = questions.findIndex((_, i) => !userAnswers[i] || userAnswers[i].length === 0);
+        if (next !== -1) { currentIndex = next; renderQuestion(); }
+    };
+    controls.prepend(jumpBtn);
+}
+
+function toggleFlag() {
+    if (flaggedQuestions.has(currentIndex)) flaggedQuestions.delete(currentIndex);
+    else flaggedQuestions.add(currentIndex);
+    saveProgress();
+    renderNav(searchInput.value.toLowerCase().trim());
+}
+
+function saveProgress() {
+    const data = { userAnswers, currentIndex, flaggedQuestions: Array.from(flaggedQuestions) };
+    localStorage.setItem('quiz_progress_save', JSON.stringify(data));
+}
+
+function restoreProgress() {
+    const saved = localStorage.getItem('quiz_progress_save');
+    const savedPlat = localStorage.getItem('selected_platform');
+    if (savedPlat) platformSelect.value = savedPlat;
+    if (saved) {
+        const d = JSON.parse(saved);
+        userAnswers = d.userAnswers || {}; currentIndex = d.currentIndex || 0;
+        flaggedQuestions = new Set(d.flaggedQuestions || []);
+    }
+}
+
 function startTimer(s) {
     timeLeft = s; 
     timerInterval = setInterval(() => {
@@ -332,3 +312,37 @@ function navigate(d) { currentIndex += d; renderQuestion(); saveProgress(); }
 prevBtn.addEventListener('click', () => navigate(-1));
 nextBtn.addEventListener('click', () => navigate(1));
 submitBtn.addEventListener('click', () => calculateResult(false));
+resetBtn.addEventListener('click', () => { if(confirm("Reset all?")) { localStorage.clear(); location.reload(); }});
+fileInput.addEventListener('change', handleFile);
+async function handleFile(event) {
+    const files = event.target.files;
+    for (let file of files) {
+        if (!uploadedFileNames.includes(file.name)) uploadedFileNames.push(file.name);
+        const ext = file.name.split('.').pop().toLowerCase();
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            let text = "";
+            if (ext === 'docx' || ext === 'doc') {
+                const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+                text = res.value;
+            } else if (ext === 'pdf') {
+                text = await parsePDF(e.target.result);
+            } else { text = e.target.result; }
+            parseQuestions(text, true); 
+            updateFileNameUI();
+        };
+        if (['pdf','docx','doc'].includes(ext)) reader.readAsArrayBuffer(file);
+        else reader.readAsText(file);
+    }
+}
+async function parsePDF(data) {
+    const pdf = await pdfjsLib.getDocument({data}).promise;
+    let out = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        out += content.items.map(item => item.str).join(" ") + "\n";
+    }
+    return out;
+}
+function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
