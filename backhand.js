@@ -13,12 +13,17 @@ let uploadedFileNames = [];
 let flaggedQuestions = new Set();
 
 /**
- * AUTO-LOAD CONFIGURATION
+ * PLATFORM DATA CONFIGURATION
  */
-const AUTO_LOAD_FILES = [
-    'Data/zuora_billing.docx',
-    'Data/zuora_billing_300.docx'
-];
+const PLATFORM_FILES = {
+    billing: [
+        'Data/zuora_billing.docx',
+        'Data/zuora_billing_300.docx'
+    ],
+    revenue: [
+        'Data/zuora_revenue.docx' 
+    ]
+};
 
 /**
  * DOM ELEMENTS
@@ -37,6 +42,7 @@ const submitBtn = document.getElementById('submitBtn');
 const resetBtn = document.getElementById('resetBtn');
 const progressIndicator = document.getElementById('progressIndicator');
 const modeSwitcher = document.getElementById('modeSwitcher');
+const platformSelect = document.getElementById('platformSelect');
 const timerDisplay = document.getElementById('timerDisplay');
 const resultModal = document.getElementById('resultModal');
 const resultDetails = document.getElementById('resultDetails');
@@ -45,63 +51,52 @@ const resultDetails = document.getElementById('resultDetails');
  * INITIALIZATION
  */
 window.addEventListener('DOMContentLoaded', () => {
-    if (modeSwitcher) modeSwitcher.value = 'learner';
-    
-    // Setup Additional UI
-    createAdminUI();
     addFlagButton();
     addJumpButton();
-    
     restoreProgress(); 
-    autoLoadDataFolder();
+    
+    // Auto-load based on current platform selection
+    handlePlatformChange();
 });
 
 /**
- * 1. CLEAN ACTIVITY LOGGING (No Browser String / IP)
+ * PLATFORM SELECTION LOGIC
  */
-function createAdminUI() {
-    const controls = document.getElementById('sidebarControls');
-    const adminSection = document.createElement('div');
-    adminSection.style = "margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 15px;";
-    adminSection.innerHTML = `
-        <button class="btn-info" style="width:100%; margin-bottom:10px;" onclick="toggleLogVisibility()">Activity Logs</button>
-        <div id="logContainer" style="display:none; background:#f9fafb; border:1px solid #ddd; padding:10px; border-radius:6px; font-size:11px; max-height:150px; overflow-y:auto;">
-            <div id="logContent" style="font-family:sans-serif; white-space:pre-wrap;">No activity yet.</div>
-            <button class="btn-info" style="font-size:10px; margin-top:10px; width:100%; border-color:#6b7280; color:#4b5563;" onclick="downloadLogs()">Download .txt</button>
-        </div>
-    `;
-    controls.appendChild(adminSection);
-}
+platformSelect.addEventListener('change', () => {
+    if(confirm("Changing platform will reset current progress. Continue?")) {
+        localStorage.clear();
+        location.reload();
+    } else {
+        // Revert selection if canceled
+        platformSelect.value = localStorage.getItem('selected_platform') || 'billing';
+    }
+});
 
-function logActivity(action) {
-    const now = new Date();
-    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const entry = `[${timestamp}] ${action}`;
+async function handlePlatformChange() {
+    const selected = platformSelect.value;
+    localStorage.setItem('selected_platform', selected);
+    const filesToLoad = PLATFORM_FILES[selected] || [];
     
-    let logs = localStorage.getItem('app_activity_logs') || "";
-    logs += entry + "\n";
-    localStorage.setItem('app_activity_logs', logs);
+    questions = []; // Clear existing
+    uploadedFileNames = [];
     
-    const logContent = document.getElementById('logContent');
-    if(logContent) logContent.innerText = logs;
-}
-
-function toggleLogVisibility() {
-    const logBox = document.getElementById('logContainer');
-    logBox.style.display = logBox.style.display === 'none' ? 'block' : 'none';
-}
-
-function downloadLogs() {
-    const data = localStorage.getItem('app_activity_logs') || "No logs available.";
-    const blob = new Blob([data], { type: 'text/plain' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = "Assessment_Logs.txt";
-    link.click();
+    for (const filePath of filesToLoad) {
+        try {
+            const response = await fetch(filePath);
+            if (!response.ok) continue;
+            const arrayBuffer = await response.arrayBuffer();
+            const fileName = filePath.split('/').pop();
+            if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
+            const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+            parseQuestions(res.value, false); 
+            updateFileNameUI();
+        } catch (err) { console.error("Auto-load failed", err); }
+    }
+    if (questions.length > 0) initQuiz();
 }
 
 /**
- * 2. NAVIGATION & FLAGGING UI
+ * NAVIGATION & FLAGGING UI
  */
 function addFlagButton() {
     const flagContainer = document.getElementById('flagContainer');
@@ -131,17 +126,14 @@ function addJumpButton() {
 }
 
 function toggleFlag() {
-    if (flaggedQuestions.has(currentIndex)) {
-        flaggedQuestions.delete(currentIndex);
-    } else {
-        flaggedQuestions.add(currentIndex);
-    }
+    if (flaggedQuestions.has(currentIndex)) flaggedQuestions.delete(currentIndex);
+    else flaggedQuestions.add(currentIndex);
     renderNav();
     saveProgress();
 }
 
 /**
- * 3. AUTO-SAVE & RESTORE
+ * AUTO-SAVE & RESTORE
  */
 function saveProgress() {
     const data = { userAnswers, currentIndex, flaggedQuestions: Array.from(flaggedQuestions) };
@@ -150,6 +142,8 @@ function saveProgress() {
 
 function restoreProgress() {
     const saved = localStorage.getItem('quiz_progress_save');
+    const savedPlat = localStorage.getItem('selected_platform');
+    if (savedPlat) platformSelect.value = savedPlat;
     if (saved) {
         const d = JSON.parse(saved);
         userAnswers = d.userAnswers || {};
@@ -161,22 +155,6 @@ function restoreProgress() {
 /**
  * CORE LOGIC
  */
-async function autoLoadDataFolder() {
-    for (const filePath of AUTO_LOAD_FILES) {
-        try {
-            const response = await fetch(filePath);
-            if (!response.ok) continue;
-            const arrayBuffer = await response.arrayBuffer();
-            const fileName = filePath.split('/').pop();
-            if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
-            const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-            parseQuestions(res.value, false); 
-            updateFileNameUI();
-        } catch (err) { console.error("Auto-load failed", err); }
-    }
-    if (questions.length > 0) initQuiz();
-}
-
 fileInput.addEventListener('change', handleFile);
 prevBtn.addEventListener('click', () => navigate(-1));
 nextBtn.addEventListener('click', () => navigate(1));
@@ -188,8 +166,8 @@ resetBtn.addEventListener('click', () => {
     }
 });
 
-modeSwitcher.addEventListener('change', (e) => {
-    currentMode = e.target.value;
+modeSwitcher.addEventListener('change', () => {
+    currentMode = modeSwitcher.value;
     if(questions.length > 0) initQuiz();
 });
 
@@ -275,12 +253,7 @@ function renderNav() {
         const isAns = userAnswers[index] && userAnswers[index].length > 0;
         const div = document.createElement('div');
         div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
-        
-        // Visual indicator for flagged question
-        if (flaggedQuestions.has(index)) {
-            div.style.borderRight = "5px solid #dc2626";
-        }
-        
+        if (flaggedQuestions.has(index)) div.style.borderRight = "5px solid #dc2626";
         div.innerHTML = `<span>Question ${q.originalNumber}</span>${isAns ? '<span>✓</span>' : ''}`;
         div.onclick = () => { currentIndex = index; renderQuestion(); };
         navList.appendChild(div);
@@ -293,12 +266,10 @@ function renderQuestion() {
     qText.innerText = q.text;
     optionsList.innerHTML = '';
     
-    // Update Flag Button UI
     const flagBtn = document.getElementById('flagBtn');
     if(flagBtn) {
         flagBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag for Review";
         flagBtn.style.background = flaggedQuestions.has(currentIndex) ? "#fee2e2" : "#f3f4f6";
-        flagBtn.style.borderColor = flaggedQuestions.has(currentIndex) ? "#f87171" : "#d1d5db";
     }
 
     const ansKeys = q.answer.match(/[A-G]/gi) || [];
@@ -356,8 +327,6 @@ function calculateResult(auto) {
     const percentage = ((score / questions.length) * 100).toFixed(1);
     resultDetails.innerHTML = `<div style="text-align:left;"><p><strong>Score:</strong> ${score}/${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
     resultModal.style.display = 'flex';
-    
-    logActivity(`Finished. Score: ${score}/${questions.length} (${percentage}%)`);
     localStorage.removeItem('quiz_progress_save'); 
     renderNav(); renderQuestion(); 
 }
