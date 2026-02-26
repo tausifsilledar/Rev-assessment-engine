@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Quiz Viewer </title>
+    <title>Secure Quiz Viewer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -114,6 +114,7 @@
             margin-top: 10px;
             cursor: pointer;
             border-radius: 4px;
+            font-weight: 600;
         }
 
         .nav-list { flex: 1; overflow-y: auto; margin-top: 10px; }
@@ -128,18 +129,11 @@
             border: 1px solid transparent;
             display: flex;
             justify-content: space-between;
+            transition: all 0.2s;
         }
 
         .nav-item.active { background: #eff6ff; color: var(--accent-color); font-weight: 600; border-color: #bfdbfe; }
         .nav-item.answered { color: var(--success-color); }
-
-        .sidebar-footer {
-            padding-top: 15px;
-            border-top: 1px solid var(--border-color);
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-align: center;
-        }
 
         .content-area { flex: 1; padding: 40px; overflow-y: auto; display: flex; justify-content: center; }
 
@@ -153,7 +147,7 @@
 
         .option-label {
             display: flex; align-items: center; padding: 16px; border: 1px solid var(--border-color);
-            border-radius: 8px; cursor: pointer; margin-top: 10px;
+            border-radius: 8px; cursor: pointer; margin-top: 10px; transition: background 0.2s;
         }
 
         .footer {
@@ -167,7 +161,6 @@
         .btn-submit { background: var(--success-color); color: white; display: none; }
         .btn-reset { background: #6b7280; color: white; display: none; }
 
-        /* Modals */
         #resultModal, #formatModal {
             display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
@@ -182,9 +175,9 @@
     <div class="header-controls">
         <div id="timerDisplay">00:00</div>
         <select id="modeSwitcher">
-            <option value="test">Test </option>
+            <option value="test">Test</option>
             <option value="timed">Test With Timer</option>
-            <option value="learner" selected>Learner </option>
+            <option value="learner" selected>Learner</option>
         </select>
     </div>
 </header>
@@ -198,10 +191,7 @@
             <button class="btn-info" onclick="toggleFormatGuide()">Question Format Guide</button>
         </div>
         <div id="navList" class="nav-list"></div>
-        <div class="sidebar-footer">
-            
-        </div>
-    </aside>
+        <div id="sidebarControls"></div> </aside>
 
     <div class="content-area">
         <div id="welcomeScreen" style="text-align: center;">
@@ -209,7 +199,7 @@
             <p>Upload your assessment files to start.</p>
         </div>
         <div class="question-card" id="questionCard" style="display: none;">
-            <span id="qNumText" class="question-number"></span>
+            <div id="flagContainer"></div> <span id="qNumText" class="question-number"></span>
             <div id="qText" class="question-text"></div>
             <div id="optionsList" class="options-container"></div>
         </div>
@@ -235,9 +225,6 @@
             Answer: B<br><br>
             <em>Multiple answers: Answer: A, B</em>
         </p>
-        <div class="sidebar-footer">
-            
-        </div>
         <button class="btn-next" style="margin-top:20px; width:100%;" onclick="toggleFormatGuide()">Close</button>
     </div>
 </div>
@@ -260,5 +247,4 @@
     }
 </script>
 </body>
-
 </html>
