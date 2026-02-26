@@ -4,13 +4,12 @@
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
-let currentMode = 'learner'; 
+let currentMode = 'learner'; // Default to learner
 let timeLeft = 0;
 let timerInterval = null;
 let isSubmitted = false;
 let startTime = 0;
 let uploadedFileNames = [];
-let flaggedQuestions = new Set();
 
 /**
  * AUTO-LOAD CONFIGURATION
@@ -42,157 +41,53 @@ const resultModal = document.getElementById('resultModal');
 const resultDetails = document.getElementById('resultDetails');
 
 /**
- * INITIALIZATION
+ * INITIALIZATION & AUTO-LOAD
  */
 window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitcher) modeSwitcher.value = 'learner';
-    
-    createAdminUI();
-    addFlagButton();
-    addJumpButton(); // NEW UI Button
-    
-    restoreProgress(); 
     autoLoadDataFolder();
 });
 
-/**
- * 1. CLEAN LOGGING UI (No IP, No Browser String)
- */
-function createAdminUI() {
-    const aside = document.querySelector('aside');
-    const adminSection = document.createElement('div');
-    adminSection.style = "margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 15px;";
-    adminSection.innerHTML = `
-        <button class="btn-info" style="width:100%; margin-bottom:10px;" onclick="toggleLogVisibility()">Activity Logs</button>
-        <div id="logContainer" style="display:none; background:#f9fafb; border:1px solid #ddd; padding:10px; border-radius:6px; font-size:11px; max-height:150px; overflow-y:auto;">
-            <div id="logContent" style="font-family:sans-serif;">No activity yet.</div>
-            <button class="btn-info" style="font-size:10px; margin-top:10px; width:100%;" onclick="downloadLogs()">Download .txt</button>
-        </div>
-    `;
-    aside.appendChild(adminSection);
-}
-
-function logActivity(action) {
-    const timestamp = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const entry = `[${timestamp}] ${action}`;
-    
-    let logs = localStorage.getItem('app_activity_logs') || "";
-    logs += entry + "\n";
-    localStorage.setItem('app_activity_logs', logs);
-    
-    const logContent = document.getElementById('logContent');
-    if(logContent) logContent.innerText = logs;
-}
-
-function toggleLogVisibility() {
-    const logBox = document.getElementById('logContainer');
-    logBox.style.display = logBox.style.display === 'none' ? 'block' : 'none';
-}
-
-function downloadLogs() {
-    const data = localStorage.getItem('app_activity_logs');
-    const blob = new Blob([data], { type: 'text/plain' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = "Assessment_Logs.txt";
-    link.click();
-}
-
-/**
- * 2. NAVIGATION & FLAGGING UI
- */
-function addFlagButton() {
-    const container = document.getElementById('questionCard');
-    const flagBtn = document.createElement('button');
-    flagBtn.id = "flagBtn";
-    flagBtn.style = "margin-bottom: 15px; background: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; padding: 6px 14px; font-size: 13px; border-radius: 6px; cursor: pointer; font-weight: 600;";
-    flagBtn.onclick = toggleFlag;
-    container.prepend(flagBtn);
-}
-
-function addJumpButton() {
-    const aside = document.querySelector('aside');
-    const jumpBtn = document.createElement('button');
-    jumpBtn.className = "btn-info";
-    jumpBtn.style = "width: 100%; margin-top: 10px; border-color: #f59e0b; color: #b45309;";
-    jumpBtn.innerText = "Jump to Unanswered";
-    jumpBtn.onclick = () => {
-        const nextUnanswered = questions.findIndex((_, i) => !userAnswers[i] || userAnswers[i].length === 0);
-        if (nextUnanswered !== -1) {
-            currentIndex = nextUnanswered;
-            renderQuestion();
-        } else {
-            alert("All questions answered!");
-        }
-    };
-    aside.appendChild(jumpBtn);
-}
-
-function toggleFlag() {
-    if (flaggedQuestions.has(currentIndex)) {
-        flaggedQuestions.delete(currentIndex);
-    } else {
-        flaggedQuestions.add(currentIndex);
-    }
-    renderNav();
-    saveProgress();
-}
-
-/**
- * 3. AUTO-SAVE & RESTORE
- */
-function saveProgress() {
-    const data = { userAnswers, currentIndex, flaggedQuestions: Array.from(flaggedQuestions) };
-    localStorage.setItem('quiz_progress_save', JSON.stringify(data));
-}
-
-function restoreProgress() {
-    const saved = localStorage.getItem('quiz_progress_save');
-    if (saved) {
-        const d = JSON.parse(saved);
-        userAnswers = d.userAnswers || {};
-        currentIndex = d.currentIndex || 0;
-        flaggedQuestions = new Set(d.flaggedQuestions || []);
-    }
-}
-
-/**
- * CORE LOGIC
- */
 async function autoLoadDataFolder() {
     for (const filePath of AUTO_LOAD_FILES) {
         try {
             const response = await fetch(filePath);
             if (!response.ok) continue;
+            
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
+
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             parseQuestions(res.value, false); 
             updateFileNameUI();
-        } catch (err) { console.error("Auto-load failed", err); }
+        } catch (err) {
+            console.error("Auto-load failed", err);
+        }
     }
     if (questions.length > 0) initQuiz();
 }
 
+/**
+ * EVENT LISTENERS
+ */
 fileInput.addEventListener('change', handleFile);
 prevBtn.addEventListener('click', () => navigate(-1));
 nextBtn.addEventListener('click', () => navigate(1));
 submitBtn.addEventListener('click', () => calculateResult(false));
-resetBtn.addEventListener('click', () => {
-    if(confirm("Wipe all progress?")) {
-        localStorage.clear();
-        location.reload();
-    }
-});
+resetBtn.addEventListener('click', resetQuizState);
 
 modeSwitcher.addEventListener('change', (e) => {
     currentMode = e.target.value;
     if(questions.length > 0) initQuiz();
 });
 
+/**
+ * FILE HANDLING
+ */
 async function handleFile(event) {
     const files = event.target.files;
+    if (!files.length) return;
     for (let file of files) {
         if (!uploadedFileNames.includes(file.name)) uploadedFileNames.push(file.name);
         const ext = file.name.split('.').pop().toLowerCase();
@@ -204,7 +99,9 @@ async function handleFile(event) {
                 text = res.value;
             } else if (ext === 'pdf') {
                 text = await parsePDF(e.target.result);
-            } else { text = e.target.result; }
+            } else {
+                text = e.target.result;
+            }
             parseQuestions(text, true); 
             updateFileNameUI();
         };
@@ -224,11 +121,17 @@ async function parsePDF(data) {
     return out;
 }
 
-function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
+function updateFileNameUI() {
+    fileNameDisplay.innerText = uploadedFileNames.join(", ");
+}
 
+/**
+ * PARSING ENGINE
+ */
 function parseQuestions(rawText, shouldInit = true) {
     const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
     const chunks = cleanText.split(/(?=\n\s*\d+\.)|(?=^\s*\d+\.)/g);
+    
     chunks.forEach(chunk => {
         const block = chunk.trim();
         if (!block) return;
@@ -246,7 +149,9 @@ function parseQuestions(rawText, shouldInit = true) {
                 }
                 if (optText) options.push(optText);
             }
-            if (options.length > 0) questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
+            if (options.length > 0) {
+                questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
+            }
         }
     });
     if (shouldInit && questions.length > 0) initQuiz();
@@ -254,15 +159,22 @@ function parseQuestions(rawText, shouldInit = true) {
 
 function initQuiz() {
     currentMode = modeSwitcher.value; 
-    currentIndex = Math.min(currentIndex, questions.length - 1);
+
+    currentIndex = 0; 
     isSubmitted = false; 
+    userAnswers = {}; 
     stopTimer();
+
     welcomeScreen.style.display = 'none';
     questionCard.style.display = 'block';
     resetBtn.style.display = 'block';
+    
     submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
     timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
+    
+    // Capture the start time for the assessment summary
     startTime = Date.now();
+
     if (currentMode === 'timed') startTimer(questions.length * 60); 
     renderNav(); renderQuestion();
 }
@@ -273,9 +185,6 @@ function renderNav() {
         const isAns = userAnswers[index] && userAnswers[index].length > 0;
         const div = document.createElement('div');
         div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
-        if (flaggedQuestions.has(index)) {
-            div.style.borderRight = "5px solid #dc2626";
-        }
         div.innerHTML = `<span>Question ${q.originalNumber}</span>${isAns ? '<span>✓</span>' : ''}`;
         div.onclick = () => { currentIndex = index; renderQuestion(); };
         navList.appendChild(div);
@@ -288,23 +197,26 @@ function renderQuestion() {
     qText.innerText = q.text;
     optionsList.innerHTML = '';
     
-    const flagBtn = document.getElementById('flagBtn');
-    if(flagBtn) {
-        flagBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag for Review";
-        flagBtn.style.background = flaggedQuestions.has(currentIndex) ? "#fee2e2" : "#f3f4f6";
-    }
-
     const ansKeys = q.answer.match(/[A-G]/gi) || [];
     const isMulti = ansKeys.length > 1;
+
     q.options.forEach((opt, idx) => {
         const label = document.createElement('label');
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
+
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
-            label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5"; label.style.borderWidth = "2px";
+            label.style.borderColor = "#059669";
+            label.style.backgroundColor = "#ecfdf5";
+            label.style.borderWidth = "2px";
         }
-        label.innerHTML = `<input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''} onchange="handleSelection(${idx}, ${isMulti})"><span style="margin-left:10px;">${opt}</span>`;
+
+        label.innerHTML = `
+            <input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''}
+                onchange="handleSelection(${idx}, ${isMulti})">
+            <span style="margin-left:10px;">${opt}</span>
+        `;
         optionsList.appendChild(label);
     });
     prevBtn.disabled = currentIndex === 0;
@@ -321,7 +233,6 @@ function handleSelection(idx, multi) {
         else userAnswers[currentIndex].push(idx);
     } else userAnswers[currentIndex] = [idx];
     renderNav();
-    saveProgress();
 }
 
 function startTimer(s) {
@@ -329,30 +240,51 @@ function startTimer(s) {
     timerInterval = setInterval(() => {
         timeLeft--;
         const m = Math.floor(timeLeft/60), sc = timeLeft%60;
-        if(timerDisplay) timerDisplay.innerText = `${m.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
+        timerDisplay.innerText = `${m.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
         if(timeLeft <= 0) calculateResult(true);
     }, 1000);
 }
 
-function stopTimer() { clearInterval(timerInterval); if(timerDisplay) timerDisplay.innerText = "00:00"; }
+function stopTimer() { clearInterval(timerInterval); timerDisplay.innerText = "00:00"; }
 
 function calculateResult(auto) {
-    isSubmitted = true; stopTimer();
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    const timeTakenStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+    isSubmitted = true; 
+    stopTimer();
+
+    // 1. Calculate Time Taken
+    const endTime = Date.now();
+    const elapsedTotalSeconds = Math.floor((endTime - startTime) / 1000);
+    const mins = Math.floor(elapsedTotalSeconds / 60);
+    const secs = elapsedTotalSeconds % 60;
+    const timeTakenStr = `${mins}m ${secs}s`;
+
+    // 2. Calculate Score & Attempts
     let score = 0;
+    let attempted = 0;
     questions.forEach((q, i) => {
         const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
+        
+        if (userAnswers[i] && userAnswers[i].length > 0) attempted++;
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
+
     const percentage = ((score / questions.length) * 100).toFixed(1);
-    resultDetails.innerHTML = `<div style="text-align:left;"><p><strong>Score:</strong> ${score}/${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
+
+    // 3. Render Detailed Summary
+    resultDetails.innerHTML = `
+        <div style="text-align: left; line-height: 1.8; font-size: 1.1em;">
+            <p><strong>Score:</strong> ${score} / ${questions.length} (${percentage}%)</p>
+            <p><strong>Time Taken:</strong> ${timeTakenStr}</p>
+            <p><strong>Attempted:</strong> ${attempted} / ${questions.length}</p>
+            <p><strong>Status:</strong> ${percentage >= 70 ? '<span style="color:#059669">PASSED</span>' : '<span style="color:#dc2626">FAILED</span>'}</p>
+        </div>
+    `;
+
     resultModal.style.display = 'flex';
-    
-    logActivity(`Finished. Score: ${score}/${questions.length} (${percentage}%)`);
-    localStorage.removeItem('quiz_progress_save'); 
-    renderNav(); renderQuestion(); 
+    renderNav(); 
+    renderQuestion(); 
 }
 
-function navigate(d) { currentIndex += d; renderQuestion(); saveProgress(); }
+function resetQuizState() { if(confirm("Clear all?")) initQuiz(); }
+function navigate(d) { currentIndex += d; renderQuestion(); }
