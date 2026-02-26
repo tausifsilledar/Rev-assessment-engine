@@ -56,7 +56,7 @@
             display: none;
         }
 
-        #modeSwitcher {
+        .select-styled {
             background: #374151;
             color: white;
             border: 1px solid #4b5563;
@@ -174,16 +174,24 @@
     <div class="header-title">Assessment Engine v2.0</div>
     <div class="header-controls">
         <div id="timerDisplay">00:00</div>
-        <select id="modeSwitcher">
+        <select id="modeSwitcher" class="select-styled">
             <option value="test">Test</option>
             <option value="timed">Test With Timer</option>
-            <option value="learner" selected>Learner</option>
+            <option value="learner" selected>Learner Mode</option>
         </select>
     </div>
 </header>
 
 <main>
     <aside>
+        <div style="margin-bottom: 15px;">
+            <label style="font-size: 0.75rem; font-weight: bold; color: var(--text-muted); display: block; margin-bottom: 5px;">SELECT PLATFORM</label>
+            <select id="platformSelect" class="select-styled" style="width: 100%; background: #f3f4f6; color: #111827; border: 1px solid #d1d5db;">
+                <option value="billing">Zuora Billing</option>
+                <option value="revenue">Zuora Revenue</option>
+            </select>
+        </div>
+
         <div class="upload-section">
             <label for="fileInput" class="custom-file-upload">Choose File</label>
             <input type="file" id="fileInput" accept=".docx,.doc,.pdf,.txt,.xlsx,.csv" multiple />
@@ -191,15 +199,17 @@
             <button class="btn-info" onclick="toggleFormatGuide()">Question Format Guide</button>
         </div>
         <div id="navList" class="nav-list"></div>
-        <div id="sidebarControls"></div> </aside>
+        <div id="sidebarControls"></div> 
+    </aside>
 
     <div class="content-area">
         <div id="welcomeScreen" style="text-align: center;">
             <h2 style="margin-bottom: 10px;">Ready to Begin?</h2>
-            <p>Upload your assessment files to start.</p>
+            <p>Select a platform or upload your assessment files.</p>
         </div>
         <div class="question-card" id="questionCard" style="display: none;">
-            <div id="flagContainer"></div> <span id="qNumText" class="question-number"></span>
+            <div id="flagContainer"></div>
+            <span id="qNumText" class="question-number"></span>
             <div id="qText" class="question-text"></div>
             <div id="optionsList" class="options-container"></div>
         </div>
