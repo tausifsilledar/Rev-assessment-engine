@@ -77,22 +77,45 @@ async function handlePlatformChange() {
     localStorage.setItem('selected_platform', selected);
     const filesToLoad = PLATFORM_FILES[selected] || [];
     
-    questions = []; // Clear existing
+    // 1. Reset state completely
+    questions = []; 
     uploadedFileNames = [];
+    currentIndex = 0;
+    userAnswers = {};
+    flaggedQuestions = new Set();
     
+    // 2. Clear UI to prevent showing old data
+    navList.innerHTML = '';
+    questionCard.style.display = 'none';
+    welcomeScreen.style.display = 'block';
+    updateFileNameUI();
+
+    // 3. Load all files for the specific platform
     for (const filePath of filesToLoad) {
         try {
             const response = await fetch(filePath);
-            if (!response.ok) continue;
+            if (!response.ok) {
+                console.warn(`File not found: ${filePath}`);
+                continue;
+            }
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
+            
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
+            
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+            // Set shouldInit to false here so we don't jump the gun
             parseQuestions(res.value, false); 
             updateFileNameUI();
-        } catch (err) { console.error("Auto-load failed", err); }
+        } catch (err) { 
+            console.error("Auto-load failed for", filePath, err); 
+        }
     }
-    if (questions.length > 0) initQuiz();
+
+    // 4. Manual Init once all fetches are done
+    if (questions.length > 0) {
+        initQuiz();
+    }
 }
 
 /**
@@ -332,4 +355,5 @@ function calculateResult(auto) {
 }
 
 function navigate(d) { currentIndex += d; renderQuestion(); saveProgress(); }
+
 
