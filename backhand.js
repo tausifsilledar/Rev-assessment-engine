@@ -1,3 +1,6 @@
+/**
+ * GLOBAL STATE
+ */
 let questions = [];
 let currentIndex = 0;
 let userAnswers = {}; 
@@ -9,6 +12,9 @@ let startTime = 0;
 let uploadedFileNames = [];
 let flaggedQuestions = new Set();
 
+/**
+ * PLATFORM DATA CONFIGURATION
+ */
 const PLATFORM_FILES = {
     billing: [
         'Data/zuora_billing.docx',
@@ -19,6 +25,9 @@ const PLATFORM_FILES = {
     ]
 };
 
+/**
+ * DOM ELEMENTS
+ */
 const fileInput = document.getElementById('fileInput');
 const fileNameDisplay = document.getElementById('fileNameDisplay');
 const navList = document.getElementById('navList');
@@ -37,7 +46,14 @@ const platformSelect = document.getElementById('platformSelect');
 const timerDisplay = document.getElementById('timerDisplay');
 const resultModal = document.getElementById('resultModal');
 const resultDetails = document.getElementById('resultDetails');
+const helpBtn = document.getElementById('helpBtn');
+const helpModal = document.getElementById('helpModal');
+const guideBtn = document.getElementById('guideBtn');
+const formatModal = document.getElementById('formatModal');
 
+/**
+ * INITIALIZATION
+ */
 window.addEventListener('DOMContentLoaded', () => {
     addFlagButton();
     addJumpButton();
@@ -45,6 +61,22 @@ window.addEventListener('DOMContentLoaded', () => {
     handlePlatformChange();
 });
 
+/**
+ * HELP & GUIDE LOGIC
+ */
+helpBtn.addEventListener('click', () => helpModal.style.display = 'flex');
+guideBtn.addEventListener('click', () => formatModal.style.display = 'flex');
+
+// Close modals when clicking outside the box
+window.addEventListener('click', (e) => {
+    if (e.target === helpModal) helpModal.style.display = 'none';
+    if (e.target === formatModal) formatModal.style.display = 'none';
+    if (e.target === resultModal) resultModal.style.display = 'none';
+});
+
+/**
+ * PLATFORM SELECTION LOGIC
+ */
 platformSelect.addEventListener('change', () => {
     localStorage.setItem('selected_platform', platformSelect.value);
     userAnswers = {};
@@ -57,6 +89,7 @@ platformSelect.addEventListener('change', () => {
 async function handlePlatformChange() {
     const selected = platformSelect.value;
     const filesToLoad = PLATFORM_FILES[selected] || [];
+    
     questions = []; 
     uploadedFileNames = [];
     navList.innerHTML = '';
@@ -66,19 +99,27 @@ async function handlePlatformChange() {
     
     for (const filePath of filesToLoad) {
         try {
-            const response = await fetch(filePath);
+            // CACHE BUSTER: Adding ?t=... forces browser to download the NEW file
+            const response = await fetch(`${filePath}?t=${Date.now()}`);
             if (!response.ok) continue;
+            
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
+            
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
+            
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             parseQuestions(res.value, false); 
             updateFileNameUI();
         } catch (err) { console.error("Auto-load failed", err); }
     }
+    
     if (questions.length > 0) initQuiz();
 }
 
+/**
+ * NAVIGATION & FLAGGING UI
+ */
 function addFlagButton() {
     const flagContainer = document.getElementById('flagContainer');
     const flagBtn = document.createElement('button');
@@ -109,6 +150,9 @@ function toggleFlag() {
     saveProgress();
 }
 
+/**
+ * AUTO-SAVE & RESTORE
+ */
 function saveProgress() {
     const data = { userAnswers, currentIndex, flaggedQuestions: Array.from(flaggedQuestions) };
     localStorage.setItem('quiz_progress_save', JSON.stringify(data));
@@ -126,13 +170,24 @@ function restoreProgress() {
     }
 }
 
+/**
+ * CORE LOGIC
+ */
 fileInput.addEventListener('change', handleFile);
 prevBtn.addEventListener('click', () => navigate(-1));
 nextBtn.addEventListener('click', () => navigate(1));
 submitBtn.addEventListener('click', () => calculateResult(false));
-resetBtn.addEventListener('click', () => { if(confirm("Wipe all progress?")) { localStorage.clear(); location.reload(); } });
+resetBtn.addEventListener('click', () => {
+    if(confirm("Wipe all progress?")) {
+        localStorage.clear();
+        location.reload();
+    }
+});
 
-modeSwitcher.addEventListener('change', () => { currentMode = modeSwitcher.value; if(questions.length > 0) initQuiz(); });
+modeSwitcher.addEventListener('change', () => {
+    currentMode = modeSwitcher.value;
+    if(questions.length > 0) initQuiz();
+});
 
 async function handleFile(event) {
     const files = event.target.files;
@@ -142,9 +197,12 @@ async function handleFile(event) {
         const reader = new FileReader();
         reader.onload = async (e) => {
             let text = "";
-            if (ext === 'docx' || ext === 'doc') { const res = await mammoth.extractRawText({ arrayBuffer: e.target.result }); text = res.value; }
-            else if (ext === 'pdf') { text = await parsePDF(e.target.result); }
-            else { text = e.target.result; }
+            if (ext === 'docx' || ext === 'doc') {
+                const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+                text = res.value;
+            } else if (ext === 'pdf') {
+                text = await parsePDF(e.target.result);
+            } else { text = e.target.result; }
             parseQuestions(text, true); 
             updateFileNameUI();
         };
@@ -226,11 +284,13 @@ function renderQuestion() {
     qNumText.innerText = `Question ${currentIndex + 1} of ${questions.length}`;
     qText.innerText = q.text;
     optionsList.innerHTML = '';
+    
     const flagBtn = document.getElementById('flagBtn');
     if(flagBtn) {
         flagBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag for Review";
         flagBtn.style.background = flaggedQuestions.has(currentIndex) ? "#fee2e2" : "#f3f4f6";
     }
+
     const ansKeys = q.answer.match(/[A-G]/gi) || [];
     const isMulti = ansKeys.length > 1;
     q.options.forEach((opt, idx) => {
@@ -238,7 +298,9 @@ function renderQuestion() {
         label.className = 'option-label';
         const isSel = userAnswers[currentIndex]?.includes(idx);
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
-        if ((currentMode === 'learner' || isSubmitted) && isCorrect) { label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5"; label.style.borderWidth = "2px"; }
+        if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
+            label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5"; label.style.borderWidth = "2px";
+        }
         label.innerHTML = `<input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''} onchange="handleSelection(${idx}, ${isMulti})"><span style="margin-left:10px;">${opt}</span>`;
         optionsList.appendChild(label);
     });
