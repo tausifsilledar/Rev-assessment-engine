@@ -21,7 +21,7 @@ const PLATFORM_FILES = {
         'Data/zuora_billing_300.docx'
     ],
     revenue: [
-        'Data/zuora_revenue.docx' 
+        'Data/zuora_revenue_questions.docx' 
     ]
 };
 
@@ -332,3 +332,4 @@ function calculateResult(auto) {
 }
 
 function navigate(d) { currentIndex += d; renderQuestion(); saveProgress(); }
+
