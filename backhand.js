@@ -12,17 +12,9 @@ let startTime = 0;
 let uploadedFileNames = [];
 let flaggedQuestions = new Set();
 
-/**
- * PLATFORM DATA CONFIGURATION
- */
 const PLATFORM_FILES = {
-    billing: [
-        'Data/zuora_billing.docx',
-        'Data/zuora_billing_300.docx'
-    ],
-    revenue: [
-        'Data/zuora_revenue_questions.docx' 
-    ]
+    billing: ['Data/zuora_billing.docx', 'Data/zuora_billing_300.docx'],
+    revenue: ['Data/zuora_revenue_questions.docx']
 };
 
 /**
@@ -50,6 +42,8 @@ const helpBtn = document.getElementById('helpBtn');
 const helpModal = document.getElementById('helpModal');
 const guideBtn = document.getElementById('guideBtn');
 const formatModal = document.getElementById('formatModal');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
 
 /**
  * INITIALIZATION
@@ -62,12 +56,20 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * HELP & GUIDE LOGIC
+ * HELP & SEARCH LOGIC
  */
 helpBtn.addEventListener('click', () => helpModal.style.display = 'flex');
 guideBtn.addEventListener('click', () => formatModal.style.display = 'flex');
 
-// Close modals when clicking outside the box
+searchBtn.addEventListener('click', () => {
+    const term = searchInput.value.toLowerCase().trim();
+    renderNav(term);
+});
+
+searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') renderNav(searchInput.value.toLowerCase().trim());
+});
+
 window.addEventListener('click', (e) => {
     if (e.target === helpModal) helpModal.style.display = 'none';
     if (e.target === formatModal) formatModal.style.display = 'none';
@@ -75,13 +77,11 @@ window.addEventListener('click', (e) => {
 });
 
 /**
- * PLATFORM SELECTION LOGIC
+ * PLATFORM SELECTION
  */
 platformSelect.addEventListener('change', () => {
     localStorage.setItem('selected_platform', platformSelect.value);
-    userAnswers = {};
-    flaggedQuestions = new Set();
-    currentIndex = 0;
+    userAnswers = {}; flaggedQuestions = new Set(); currentIndex = 0;
     localStorage.removeItem('quiz_progress_save');
     handlePlatformChange();
 });
@@ -89,42 +89,35 @@ platformSelect.addEventListener('change', () => {
 async function handlePlatformChange() {
     const selected = platformSelect.value;
     const filesToLoad = PLATFORM_FILES[selected] || [];
-    
-    questions = []; 
-    uploadedFileNames = [];
-    navList.innerHTML = '';
-    questionCard.style.display = 'none';
+    questions = []; uploadedFileNames = [];
+    navList.innerHTML = ''; questionCard.style.display = 'none';
     welcomeScreen.style.display = 'block';
     updateFileNameUI();
     
     for (const filePath of filesToLoad) {
         try {
-            // CACHE BUSTER: Adding ?t=... forces browser to download the NEW file
+            // Fetch with Cache Buster
             const response = await fetch(`${filePath}?t=${Date.now()}`);
             if (!response.ok) continue;
-            
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
-            
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
-            
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             parseQuestions(res.value, false); 
             updateFileNameUI();
         } catch (err) { console.error("Auto-load failed", err); }
     }
-    
     if (questions.length > 0) initQuiz();
 }
 
 /**
- * NAVIGATION & FLAGGING UI
+ * UI HELPERS
  */
 function addFlagButton() {
     const flagContainer = document.getElementById('flagContainer');
     const flagBtn = document.createElement('button');
     flagBtn.id = "flagBtn";
-    flagBtn.style = "margin-bottom: 15px; background: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; padding: 6px 14px; font-size: 13px; border-radius: 6px; cursor: pointer; font-weight: 600;";
+    flagBtn.style = "margin-bottom: 15px; background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 14px; border-radius: 6px; cursor: pointer;";
     flagBtn.onclick = toggleFlag;
     flagContainer.appendChild(flagBtn);
 }
@@ -136,9 +129,8 @@ function addJumpButton() {
     jumpBtn.style = "width: 100%; margin-top: 10px; border-color: #f59e0b; color: #b45309;";
     jumpBtn.innerText = "Jump to Unanswered";
     jumpBtn.onclick = () => {
-        const nextUnanswered = questions.findIndex((_, i) => !userAnswers[i] || userAnswers[i].length === 0);
-        if (nextUnanswered !== -1) { currentIndex = nextUnanswered; renderQuestion(); }
-        else { alert("All questions answered!"); }
+        const next = questions.findIndex((_, i) => !userAnswers[i] || userAnswers[i].length === 0);
+        if (next !== -1) { currentIndex = next; renderQuestion(); }
     };
     controls.prepend(jumpBtn);
 }
@@ -146,13 +138,10 @@ function addJumpButton() {
 function toggleFlag() {
     if (flaggedQuestions.has(currentIndex)) flaggedQuestions.delete(currentIndex);
     else flaggedQuestions.add(currentIndex);
-    renderNav();
+    renderNav(searchInput.value.toLowerCase().trim());
     saveProgress();
 }
 
-/**
- * AUTO-SAVE & RESTORE
- */
 function saveProgress() {
     const data = { userAnswers, currentIndex, flaggedQuestions: Array.from(flaggedQuestions) };
     localStorage.setItem('quiz_progress_save', JSON.stringify(data));
@@ -164,30 +153,15 @@ function restoreProgress() {
     if (savedPlat) platformSelect.value = savedPlat;
     if (saved) {
         const d = JSON.parse(saved);
-        userAnswers = d.userAnswers || {};
-        currentIndex = d.currentIndex || 0;
+        userAnswers = d.userAnswers || {}; currentIndex = d.currentIndex || 0;
         flaggedQuestions = new Set(d.flaggedQuestions || []);
     }
 }
 
 /**
- * CORE LOGIC
+ * FILE HANDLING & PARSING
  */
 fileInput.addEventListener('change', handleFile);
-prevBtn.addEventListener('click', () => navigate(-1));
-nextBtn.addEventListener('click', () => navigate(1));
-submitBtn.addEventListener('click', () => calculateResult(false));
-resetBtn.addEventListener('click', () => {
-    if(confirm("Wipe all progress?")) {
-        localStorage.clear();
-        location.reload();
-    }
-});
-
-modeSwitcher.addEventListener('change', () => {
-    currentMode = modeSwitcher.value;
-    if(questions.length > 0) initQuiz();
-});
 
 async function handleFile(event) {
     const files = event.target.files;
@@ -250,11 +224,13 @@ function parseQuestions(rawText, shouldInit = true) {
     if (shouldInit && questions.length > 0) initQuiz();
 }
 
+/**
+ * CORE QUIZ ENGINE
+ */
 function initQuiz() {
     currentMode = modeSwitcher.value; 
     currentIndex = Math.min(currentIndex, questions.length - 1);
-    isSubmitted = false; 
-    stopTimer();
+    isSubmitted = false; stopTimer();
     welcomeScreen.style.display = 'none';
     questionCard.style.display = 'block';
     resetBtn.style.display = 'block';
@@ -265,14 +241,17 @@ function initQuiz() {
     renderNav(); renderQuestion();
 }
 
-function renderNav() {
+function renderNav(filter = "") {
     navList.innerHTML = '';
     questions.forEach((q, index) => {
+        if (filter && !q.text.toLowerCase().includes(filter)) return;
+
         const isAns = userAnswers[index] && userAnswers[index].length > 0;
         const div = document.createElement('div');
         div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
-        if (flaggedQuestions.has(index)) div.style.borderRight = "5px solid #dc2626";
-        div.innerHTML = `<span>Question ${q.originalNumber}</span>${isAns ? '<span>✓</span>' : ''}`;
+        if (flaggedQuestions.has(index)) div.style.borderRight = "4px solid #dc2626";
+        
+        div.innerHTML = `<span>Q${q.originalNumber}</span> <span style="font-size: 0.7rem; color: #9ca3af; margin-left:5px;">${q.text.substring(0, 15)}...</span> ${isAns ? '<span>✓</span>' : ''}`;
         div.onclick = () => { currentIndex = index; renderQuestion(); };
         navList.appendChild(div);
     });
@@ -285,10 +264,10 @@ function renderQuestion() {
     qText.innerText = q.text;
     optionsList.innerHTML = '';
     
-    const flagBtn = document.getElementById('flagBtn');
-    if(flagBtn) {
-        flagBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag for Review";
-        flagBtn.style.background = flaggedQuestions.has(currentIndex) ? "#fee2e2" : "#f3f4f6";
+    const fBtn = document.getElementById('flagBtn');
+    if(fBtn) {
+        fBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag";
+        fBtn.style.background = flaggedQuestions.has(currentIndex) ? "#fee2e2" : "#f3f4f6";
     }
 
     const ansKeys = q.answer.match(/[A-G]/gi) || [];
@@ -299,7 +278,7 @@ function renderQuestion() {
         const isSel = userAnswers[currentIndex]?.includes(idx);
         const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
         if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
-            label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5"; label.style.borderWidth = "2px";
+            label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5";
         }
         label.innerHTML = `<input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''} onchange="handleSelection(${idx}, ${isMulti})"><span style="margin-left:10px;">${opt}</span>`;
         optionsList.appendChild(label);
@@ -307,7 +286,7 @@ function renderQuestion() {
     prevBtn.disabled = currentIndex === 0;
     nextBtn.disabled = currentIndex === questions.length - 1;
     progressIndicator.innerText = `Progress: ${Math.round(((currentIndex + 1) / questions.length) * 100)}%`;
-    renderNav();
+    renderNav(searchInput.value.toLowerCase().trim());
 }
 
 function handleSelection(idx, multi) {
@@ -317,10 +296,13 @@ function handleSelection(idx, multi) {
         if (userAnswers[currentIndex].includes(idx)) userAnswers[currentIndex] = userAnswers[currentIndex].filter(i => i !== idx);
         else userAnswers[currentIndex].push(idx);
     } else userAnswers[currentIndex] = [idx];
-    renderNav();
+    renderNav(searchInput.value.toLowerCase().trim());
     saveProgress();
 }
 
+/**
+ * TIMER & NAVIGATION
+ */
 function startTimer(s) {
     timeLeft = s; 
     timerInterval = setInterval(() => {
@@ -331,23 +313,22 @@ function startTimer(s) {
     }, 1000);
 }
 
-function stopTimer() { clearInterval(timerInterval); if(timerDisplay) timerDisplay.innerText = "00:00"; }
+function stopTimer() { clearInterval(timerInterval); }
 
 function calculateResult(auto) {
     isSubmitted = true; stopTimer();
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    const timeTakenStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
     let score = 0;
     questions.forEach((q, i) => {
         const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
         const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
         if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
     });
-    const percentage = ((score / questions.length) * 100).toFixed(1);
-    resultDetails.innerHTML = `<div style="text-align:left;"><p><strong>Score:</strong> ${score}/${questions.length} (${percentage}%)</p><p><strong>Time:</strong> ${timeTakenStr}</p></div>`;
+    resultDetails.innerHTML = `<p><strong>Score:</strong> ${score}/${questions.length} (${((score / questions.length) * 100).toFixed(1)}%)</p>`;
     resultModal.style.display = 'flex';
-    localStorage.removeItem('quiz_progress_save'); 
-    renderNav(); renderQuestion(); 
+    renderQuestion(); 
 }
 
 function navigate(d) { currentIndex += d; renderQuestion(); saveProgress(); }
+prevBtn.addEventListener('click', () => navigate(-1));
+nextBtn.addEventListener('click', () => navigate(1));
+submitBtn.addEventListener('click', () => calculateResult(false));
