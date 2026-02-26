@@ -54,23 +54,19 @@ window.addEventListener('DOMContentLoaded', () => {
     addFlagButton();
     addJumpButton();
     restoreProgress(); 
-    
-    // Auto-load based on current platform selection
     handlePlatformChange();
 });
 
 /**
- * PLATFORM SELECTION LOGIC
+ * PLATFORM SELECTION LOGIC (FIXED: NO ALERT, NO REFRESH)
  */
 platformSelect.addEventListener('change', () => {
-    // Save selection and update data without refreshing the whole page
-    localStorage.setItem('selected_platform', platformSelect.value);
-    
-    // Clear session for new platform
+    // Just clear and reload data
     userAnswers = {};
     flaggedQuestions = new Set();
     currentIndex = 0;
     localStorage.removeItem('quiz_progress_save');
+    localStorage.setItem('selected_platform', platformSelect.value);
     
     handlePlatformChange();
 });
@@ -79,7 +75,7 @@ async function handlePlatformChange() {
     const selected = platformSelect.value;
     const filesToLoad = PLATFORM_FILES[selected] || [];
     
-    // Clear existing questions and UI
+    // Completely wipe old data before loading new
     questions = []; 
     uploadedFileNames = [];
     navList.innerHTML = '';
