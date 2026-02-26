@@ -63,56 +63,45 @@ window.addEventListener('DOMContentLoaded', () => {
  * PLATFORM SELECTION LOGIC
  */
 platformSelect.addEventListener('change', () => {
-    if(confirm("Changing platform will reset current progress. Continue?")) {
-        localStorage.clear();
-        location.reload();
-    } else {
-        // Revert selection if canceled
-        platformSelect.value = localStorage.getItem('selected_platform') || 'billing';
-    }
+    // Save selection and update data without refreshing the whole page
+    localStorage.setItem('selected_platform', platformSelect.value);
+    
+    // Clear session for new platform
+    userAnswers = {};
+    flaggedQuestions = new Set();
+    currentIndex = 0;
+    localStorage.removeItem('quiz_progress_save');
+    
+    handlePlatformChange();
 });
 
 async function handlePlatformChange() {
     const selected = platformSelect.value;
-    localStorage.setItem('selected_platform', selected);
     const filesToLoad = PLATFORM_FILES[selected] || [];
     
-    // 1. Reset state completely
+    // Clear existing questions and UI
     questions = []; 
     uploadedFileNames = [];
-    currentIndex = 0;
-    userAnswers = {};
-    flaggedQuestions = new Set();
-    
-    // 2. Clear UI to prevent showing old data
     navList.innerHTML = '';
     questionCard.style.display = 'none';
     welcomeScreen.style.display = 'block';
     updateFileNameUI();
-
-    // 3. Load all files for the specific platform
+    
     for (const filePath of filesToLoad) {
         try {
             const response = await fetch(filePath);
-            if (!response.ok) {
-                console.warn(`File not found: ${filePath}`);
-                continue;
-            }
+            if (!response.ok) continue;
             const arrayBuffer = await response.arrayBuffer();
             const fileName = filePath.split('/').pop();
             
             if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
             
             const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-            // Set shouldInit to false here so we don't jump the gun
             parseQuestions(res.value, false); 
             updateFileNameUI();
-        } catch (err) { 
-            console.error("Auto-load failed for", filePath, err); 
-        }
+        } catch (err) { console.error("Auto-load failed", err); }
     }
-
-    // 4. Manual Init once all fetches are done
+    
     if (questions.length > 0) {
         initQuiz();
     }
@@ -285,6 +274,7 @@ function renderNav() {
 
 function renderQuestion() {
     const q = questions[currentIndex];
+    if (!q) return;
     qNumText.innerText = `Question ${currentIndex + 1} of ${questions.length}`;
     qText.innerText = q.text;
     optionsList.innerHTML = '';
@@ -355,5 +345,3 @@ function calculateResult(auto) {
 }
 
 function navigate(d) { currentIndex += d; renderQuestion(); saveProgress(); }
-
-
