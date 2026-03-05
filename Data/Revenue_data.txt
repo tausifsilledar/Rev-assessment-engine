@@ -1,1 +1,691 @@
+1. Which of the following is not an example of an event that can be configured in Zuora Revenue to automatically release and schedule revenue for recognition?
+A. Delivery
+B. Acceptance
+C. Profit
+D. Billing
+Answer: C
+
+2. Zuora Revenue replaces a business's general ledger. Select True or False.
+A. TRUE
+B. FALSE
+Answer: B
+
+3. In Zuora Revenue, you can review the revenue contract in detail through the _______.
+A. Dashboard
+B. Accounting UI
+C. Reports Section
+D. Workbench
+Answer: D
+
+4. Can Zuora Revenue calculate the SSP amount for a new product?
+A. Yes
+B. No
+Answer: A
+
+5. Which template is mapped to a Transaction Upload template in Zuora Revenue?
+A. POB template
+B. All the above
+C. Bundle template
+D. RC Grouping template
+Answer: D
+
+6. An RC Grouping template includes one grouping rule. Select True or False.
+A. TRUE
+B. FALSE
+Answer: B
+
+7. What information is displayed in the Contract Modification tab of a revenue contract when viewed in Workbench?
+A. A list of all the modifications applied to a revenue contract
+B. A list of modifications that can be applied in a revenue contract
+C. A list of modifications that have been applied in the earlier periods in a revenue contract
+Answer: A
+
+8. The process of transferring unposted journal entries from Zuora Revenue to your company's general ledger is known as:
+A. Managerial Accounting
+B. Transfer Accounting
+C. Equity Accounting
+D. Cost Accounting
+Answer: B
+
+9. The _____________setup in Zuora Revenue allows defining the allocation of revenue across performance obligations.
+A. SSP setup
+B. POB setup
+C. Revenue Allocation template
+Answer: B
+
+10. A “promise” to deliver goods or services in lieu of payment is known as a ______.
+A. Contractual agreement
+B. Performance obligation
+C. Lump sum contract
+D. Unilateral agreement
+Answer: B
+
+11. Which of the following is TRUE about the revenue recognition principle?
+A. It states that revenue must be recorded when cash is received.
+B. It's a rule that businesses may or may not choose to follow.
+C. It states that revenue must be recorded when a contract is signed.
+D. It states that revenue must be recorded when it is earned.
+Answer: D
+
+12. Deferred revenue is considered a liability because the business is collecting money that it has not yet earned. Select TRUE or FALSE.
+A. TRUE
+B. FALSE
+Answer: A
+
+13. Which of the following are a few system-related setups in Zuora Revenue? Select all that apply.
+A. Performance Obligation templates
+B. Standalone Selling Price
+C. Currencies
+D. Users and Roles
+E. Accounting Calendar
+F. Revenue Contract Grouping templates
+Answer: C, D, E
+
+14. Is it possible to customize the standard layouts in Zuora Revenue?
+A. No, users can only customize a copy of the standard layouts to suit their business needs
+B. Yes, users can customize the standard layouts to suit their business needs
+Answer: A
+
+15. A buyer's purchase order has details of numerous transactions. To process the transactions in Zuora Revenue, a business may choose to group the transactions into a single revenue contract or multiple contracts. Select True or False.
+A. TRUE
+B. FALSE
+Answer: A
+
+16. The approach to revenue recognition is a ______step model.
+A. Four
+B. Five
+C. Three
+Answer: B
+
+17. Zuora Revenue allows the defining of multiple grouping rules in an RC grouping template. They can be applied in a defined order through a hierarchy. Select TRUE or FALSE.
+A. TRUE
+B. FALSE
+Answer: A
+
+18. What is the price at which a vendor would sell an individual product or service to a customer if it were sold separately to a customer?
+A. Contracted Price
+B. Bookings Value
+C. List Price
+D. Standalone Selling Price
+Answer: D
+
+19. Identify the two popular accounting standards that are used by a majority of publicly traded companies globally to organize and present their financial reports periodically.
+A. ASIND
+B. GAAP
+C. ERFR
+D. IFRS
+E. AS606
+Answer: B, D
+
+20. Which policy template would you use in Zuora Revenue to group transactions into a revenue contract?
+A. Forecast Template
+B. Transactions/Cost Template
+C. POB Template
+D. RC Grouping Template
+Answer: D
+
+21. What are the five steps of revenue recognition?
+A. Identify the contract - Identify performance obligations - Determine transaction price - Allocate transaction price - Recognize revenue
+B. Identify the contract - Identify performance obligations - Determine variable consideration - Allocate transaction price - Recognize revenue
+C. Identify the contract - Identify performance obligations - Determine transaction price - Allocate fair value - Recognize revenue
+D. Identify the contract - Identify performance obligations - Determine variable consideration - Allocate fair value - Recognize revenue
+Answer: A
+
+22. With regard to the five steps of revenue recognition, which of these values are not provided by Zuora Revenue? Select the two that apply.
+A. Helps businesses meet accounting standards or guidelines
+B. Assists in faster accounting period close
+C. Minimizes compliance risk
+D. Precisely forecasts the revenue impact of business decisions
+E. Provides a complete analysis of the payment processes end-to-end
+F. Manages quotes and proposals for customers
+Answer: E, F
+
+23. The Accounting calendar in Zuora Revenue is configured during implementation and cannot be modified after go-live. Select True or False.
+A. TRUE
+B. FALSE
+Answer: B
+
+24. Users with Partial Access role privilege can be granted a mix of no access, full access, and read-only access to various menu items in the application. Select True or False.
+A. TRUE
+B. FALSE
+Answer: A
+
+25. If you create an order with support and services in two systems, how does Zuora Revenue create a single revenue contract?
+A. Using POB templates
+B. Using revenue events
+C. Using grouping rules
+D. Using transfer accounting
+Answer: C
+
+26. Sales orders with the same purchase order number and customer number can be grouped into one revenue contract. Select True or False.
+A. TRUE
+B. FALSE
+Answer: A
+
+27. What is field-based grouping in defining an RC Grouping template?
+A. Grouping on the basis of specific fields
+B. Grouping based on timing/duration
+C. Grouping always based on SO number
+D. None of the above
+Answer: A
+
+28. An agreement or promise to deliver a good or service to a customer is called a _________. 
+A. Revenue Contract
+B. Master Services Agreement
+C. Performance Obligation
+D. Contract Modification
+Answer: C
+
+29. A POB template defines _____________.
+A. The timing and release of revenue
+B. Billing rules
+C. Contract definition of services
+D. Contract grouping rules
+Answer: A
+
+30. Which of the following are mandatory to define a POB template? Select two options.
+A. POB Dependency
+B. Release Event
+C. POB Expiry
+D. Ratable Methods
+E. Forecast Template
+Answer: B, D
+
+31. What are the default options to trigger POB satisfaction in Zuora Revenue?
+A. Upon Booking
+B. Upon Billing
+C. Manually
+D. Upon Usage
+Answer: A
+
+32. A POB template can be assigned to more than one transaction line.
+A. TRUE
+B. FALSE
+Answer: A
+
+33. Assigning a POB template to a transaction releases revenue. Select True or False.
+A. TRUE
+B. FALSE
+Answer: B
+
+34. When are the upload and download buttons visible in the transaction template?
+A. Unfrozen
+B. Frozen
+C. When Review Required
+D. None of the above
+Answer: A
+
+35. Which of the following tabs in Workbench displays the actual and forecast schedules of revenue at the POB level?
+A. Waterfall
+B. Price Adjustments
+C. Pricing Orders
+D. Orders/Contract
+Answer: A
+
+
+
+36. At which transaction-level would the revenue be released when the release event is Upon Booking?
+A. Based on events
+B. Based on a upload event
+C. Based on invoice
+D. Based on sales order
+Answer: D
+
+37. Usage, shipment, acceptance, and purchase are examples of what in Zuora Revenue?
+A. Contracts
+B. Billing Triggers
+C. Orders
+D. Revenue Events
+Answer: D
+
+38. A high-value revenue contract may be protected with a hold by an authorized user such that revenue will not release until the hold itself is released.
+A. TRUE
+B. FALSE
+Answer: A
+
+39. When RCs are marked for approval, what happens to revenue in the RC?
+A. The revenue is not released until the RC has been approved
+B. The revenue can be released on demand
+C. The revenue can be released partially
+Answer: A
+
+40. Identify the ways of releasing holds in Zuora Revenue. Select all that apply.
+A. Based on events
+B. Manually
+C. Based on grouping rules
+Answer: A, B
+
+41. What is the Standalone Selling Price (SSP)?
+A. It is the price at which an entity would sell a good or service to different customers.
+B. It is the price at which an entity would sell a good or service separately to a customer.
+C. It is the price at which an entity would sell a bundle of goods or service to a customer.
+Answer: B
+
+42. The SSP range is that which is between the Below SSP band and Above SSP band values in Zuora Revenue. Select True or False.
+A. TRUE
+B. FALSE
+Answer: A
+
+43. Revenue schedules or waterfall refer to _________.
+A. The schedule corresponding to the payment schedule
+B. The amount of revenue recognized daily, weekly or quarterly
+C. The business rules related to recognition events
+D. The schedules for revenue recognition prescribed by GAAP and FASB
+Answer: B
+
+44. True or False: Contract modifications occur when changes are made to POBs before the contract creation.
+A. TRUE
+B. FALSE
+Answer: B
+
+45. Which of the following are the typical filter fields that can be seen in a transfer batch in Zuora Revenue? Select all that apply.
+A. RC ID
+B. Book Name
+C. Product Type
+D. JE Name
+E. Schd Type
+Answer: A, B, D
+
+46. In which of these currencies can a Waterfall report be generated in Zuora Revenue? Select the three that apply.
+A. Transactional currency
+B. Functional currency
+C. Reporting currency
+D. Global currency
+E. Entity currency
+Answer: A, B, C
+
+47. Which of the following is not an option to manage SSP in Zuora Revenue?
+A. Uploading SSP
+B. Defining SSP formula
+C. Using SSP Analyzer
+D. Defining SSP rule
+Answer: C
+
+48. Identify the template that brings together the revenue, cost and other price adjustments (also called variable considerations) to each of the promised good or services in a revenue contract.
+A. POB template
+B. Variable Consideration template
+C. Revenue treatment template
+D. Forecast template
+Answer: A
+
+49. A legally binding agreement that defines and governs the enforceable rights and obligations between parties is called a ______________
+A. Contract with valid agreement
+B. Performance Obligation
+C. Delivery Challan
+D. Acceptance Note
+Answer: A
+
+50. Identify the system-related configurations that need to be set up in Zuora Revenue during implementation. Select all that apply.
+A. Create custom dashboard
+B. Set up profiles
+C. Configure currency format
+D. Configure accounting structure
+E. Manage user access
+Answer: B, C, D, E
+
+51. Predefined password validation rules such as validating the length of the passwords, and checking the alphanumeric combination in a password, do not exist in Zuora Revenue. Select True or False.
+A. TRUE
+B. FALSE
+Answer: B
+
+52. Which of the following configurations in Zuora Revenue help in identifying a contract according to ASC 606 guidance. Select all that apply.
+A. Create/Modifying Revenue Contract
+B. Bundle Configuration
+C. Transfer accounting
+D. Revenue allocation
+E. Transaction Grouping
+Answer: A, E
+
+53. The default calendar defined during implementation cannot be modified later in the application. Is this True or False?
+A. FALSE
+B. TRUE
+Answer: A
+
+54. Using ___________ business can estimate the SSP of a good or service in Zuora Revenue.
+A. Historical transaction data
+B. Transaction lines with SSP values processed in the past
+C. Transactions with the sales order date in the future
+D. Non-historical transactional data
+Answer: A
+
+55. Which of the following best describes the currencies defined in Zuora Revenue?
+A. Transactional currency is the currency of the transaction and payment / Functional currency is the base currency of the business / Reporting currency is the consolidation currency used for reporting in financial statements
+B. Transactional currency is the base currency or company code currency of a business or unit of a business / Functional currency is the original currency in which transaction and payments are processed / Reporting currency is the consolidation currency used for reporting in financial statements
+C. Transactional currency is the currency of the payment / Functional currency is the base currency of the transaction / Reporting currency is the currency used in reports
+D. Transactional currency is currency of the payment irrespective of the transaction / Functional currency is the base currency or company code currency of a business or unit of a business / Reporting currency is the consolidation currency used for reporting in financial statements
+Answer: A
+
+56. Contract Liability is considered a liability because the business has collected a payment which they has not yet earned from the customer. Select True or False.
+A. TRUE
+B. FALSE
+Answer: A
+
+57. To group transactions into a revenue contract, you can use the following grouping logic. Select all that apply. 
+A. Transaction-based grouping
+B. Time-based grouping
+C. Field-based grouping
+Answer: B, C
+
+58. Which of the following is TRUE about the revenue recognition principle?
+A. It states that revenue must be recorded when it is earned
+B. It states that revenue must be recorded when cash is received
+C. It states that revenue must be recorded when a contract is signed
+Answer: A
+
+59. Identify the different role privileges that define the access level of a menu item in Zuora Revenue.
+A. No Access / Full Access
+B. Read-only / Write and override / No access / Partial Access (some menu items have full access and others don't have access, or have read-only access) / Full access (full access to all menu items)
+C. Read-only / Write-only / Full access (full access to all menu items)
+D. Read-only / None (no access) / Partial Access (some menu items have full access and others don't have access, or have read-only access) / Full access (full access to all menu items)
+Answer: D
+
+60. The data augmentation rule can be configured to apply only to a subset of transaction source data lines using:
+A. Staging values
+B. Filters
+C. Sequence
+D. Stage name
+Answer: B
+
+61. Which of the following is/are true about the data augmentation feature? Select all that apply.
+A. Modifies existing attributes in the transaction lines
+B. Does not augment transaction data in RORD
+C. Can be limited to a selective set of data
+D. Cannot create new lines of incoming transaction data
+Answer: C, D
+
+62. We can specify multiple offset accounts for a single transaction line. Select True or False.
+A. TRUE
+B. FALSE
+Answer: B
+
+63. Identify the ratable method through which revenue schedules are generated ratably between invoice start and end dates in Zuora Revenue. 
+A. Condense
+B. Contract Ratable
+C. Sliding
+D. Invoice Ratable
+Answer: D
+
+64. When the Retain SO option is enabled, time-based grouping is ignored, and the Retain SO option takes precedence. Select True or False.
+A. TRUE
+B. FALSE
+Answer: A
+
+65. Can there be a business scenario where the split ratio between parent and child lines is different for revenue and cost?
+A. Yes, the split percentages are always different
+B. No, the split percentages are never different
+C. Yes, the split percentages may be different in some (but not all) cases
+Answer: C
+
+66. You can fetch a value from a backend table using an SQL query and augment a field in incoming data using the Constant rule type. Select True or False.
+A. FALSE
+B. TRUE
+Answer: A
+
+67. Which of the following are true regarding POB dependency? Select all that apply. 
+A. The dependent performance obligation template is applied based on the release of revenue from another performance obligation
+B. A performance obligation is dependent on another performance obligation present within the same revenue contract
+C. Only when the revenue from the parent POB is released, then the revenue from the child POB can be released.
+D. Release of revenue from a performance obligation is dependent on the release of revenue from another performance obligation
+Answer: B, C, D
+
+68. Standard error codes have a prefix of RPRO that cannot be modified. Select True or False.
+A. TRUE
+B. FALSE
+Answer: A
+
+69. What are the types of RC grouping criteria? Select all that apply.
+A. SO retain
+B. Time-Based grouping
+C. Field-Based grouping
+D. Transaction-Based grouping
+Answer: A, B, C
+
+70. While creating a custom validation rule, the conditions are defined by choosing a rule type. Select all the rule types that apply to the custom validation rule.
+A. Advanced Rule
+B. Formulae
+C. Expression
+D. Constant
+Answer: C, D
+
+71. From the bundle definition file, you can identify the line item number of the parent item by referring to the Parent Item Num field. Is this True or False?
+A. FALSE
+B. TRUE
+Answer: B
+
+72. A POB template defines one of the following in Zuora Revenue. Choose the best answer. 
+A. Contract grouping rules
+B. Duration and the trigger for revenue release
+C. Billing rules
+D. Contract definition of services
+Answer: B
+
+73. The validation rules set up in the application help catch insufficient or mismatched data in the _______
+A. Collection table
+B. Journal entries
+C. Staging History table
+D. Staging table
+Answer: D
+
+74. DataPoint is an internet service provider. On a promotional event of 5G services, it offers a 10GB data card worth $20. The 10GB data is included in the customer's account after a month. Which of these options enable DataPoint to release revenue after a month from the Revenue Start Date?
+A. Do Transfer Validation
+B. POB Expiry
+C. SOB Validation
+D. Retain SO
+Answer: B
+
+75. What does R in parentheses in revenue contract RC 1005 (R) represent?
+A. The contract is in the revision timeline and the latest allocation treatment is retrospective
+B. The contract is in an initial timeline and no change has occurred during revision
+C. The contract is in the revision timeline and the latest allocation treatment is prospective
+Answer: A
+
+76. While scheduling a data collection job in Zuora Revenue, it is recommended that you run it on a/an _______.
+A. Daily basis
+B. Monthly schedule
+C. Weekly schedule
+D. Hourly basis
+Answer: D
+
+77. When you collect reduction order transactions in Zuora Revenue, the extended list price is set to:
+A. A negative value
+B. A positive value
+C. Null
+Answer: A
+
+78. When viewing a revenue contract, in which tab will you find the revenue schedules for an accounting period?
+A. Revenue Contract Details tab
+B. Pricing Orders tab
+C. Waterfall tab
+D. Transactions tab
+Answer: C
+
+79. What is the default revenue allocation treatment in the initial contract timeline period of a contract?
+A. Prospective
+B. No Allocation
+C. Retrospective
+D. New Contract
+Answer: C
+
+80. In which table is the incoming data stored before it is collected and processed in Zuora Revenue?
+A. Line Staging Table
+B. Line Staging History Table
+C. Data Augmentation Table
+D. Security Table
+Answer: A
+
+81. Which of the following options are used to release revenue hold from large number of RCs at a time?
+A. Creating a mass action batch using Manage Mass Action
+B. Creating a grouping rule
+C. Identifying the orphan transactions
+D. Creating a new RC
+Answer: A
+
+82. Zuora Revenue Workbench helps to view the waterfall of transactional lines. Select True or False.
+A. TRUE
+B. FALSE
+Answer: A
+
+83. Which field in a credit memo is used to reference an invoice in Zuora Revenue?
+A. Invoice line Num
+B. Original Invoice Line ID
+C. Invoice Num
+D. Purchase order Num
+E. Sales order number
+Answer: B
+
+84. Which of the following is an entry point for data to be collected and processed in Zuora Revenue?
+A. Security
+B. Data Augmentation
+C. Data Query
+D. Staging Tables
+Answer: D
+
+85. Identify the configuration that enables revenue recognition based on booking data under unbilled accounts till the invoice is received.
+A. A POB template to release revenue Upon Booking and the Right To Bill Flag set to N in the transaction line
+B. A POB template to release revenue Upon Billing and Right To Bill Flag set to N in the transaction line
+C. A POB template to release revenue Upon Billing and a Right To Bill Flag set to Y in the transaction line
+D. A POB template to release revenue Upon Booking and Right To Bill Flag set to Y in the transaction line
+Answer: A
+
+
+
+[Image of accounting equation Assets = Liabilities + Equity]
+
+
+86. Which of the following equations correctly represents the relationship between a business's assets, liabilities, and equity?
+A. Liabilities - Equity = Assets
+B. Assets + Liabilities = Equity
+C. Assets + Equity = Liabilities
+D. Liabilities + Equity = Assets
+Answer: D
+
+87. Which of the following are examples of financial statements?
+A. Income Statement
+B. Statement of Revenue
+C. Statement of Cash Flows
+D. Expense Statement
+E. Income Sheet
+F. Balance Sheet
+Answer: A, C, F
+
+88. The recommended best practice is to configure the Chart of Accounts in Zuora Revenue in the same structure as they are in the Chart of Accounts in the General Ledger. Select True or False.
+A. FALSE
+B. TRUE
+Answer: B
+
+89. A trial balance is run during the opening or closing of an accounting period. Select True or False.
+A. FALSE
+B. TRUE
+Answer: B
+
+90. The revenue offset account will increase the balance in the revenue account to result in a net balance. Identify whether True or False.
+A. FALSE
+B. TRUE
+Answer: A
+
+91. Sub-ledgers are created from a business's general ledger. Select True or False.
+A. TRUE
+B. FALSE
+Answer: B
+
+92. What information does a balance sheet provide?
+A. An overview of assets, liabilities, and stockholders' equity at the end of each accounting period
+B. A total of all assets, liabilities, and stockholders' equity at the beginning of each accounting period
+C. An overview of all financial transactions conducted in each accounting period
+D. A detailed account of revenue, income, and stockholders' equity at the end of each accounting period
+Answer: A
+
+93. Which one of the following tasks can custom events perform in Zuora Revenue?
+A. Release and process revenue and cost based on amount, percent or quantity
+B. Approve a POB
+C. Release hold on cost
+D. Release revenue and release cost associated with it even if the revenue is not released
+Answer: A
+
+94. A hold cannot be applied to one of the following in Zuora Revenue.
+A. Waterfall
+B. Performance Obligation
+C. Transaction Line
+D. Revenue Contract
+Answer: A
+
+95. Pick all eligible statements that best describes a transfer hold in Zuora Revenue?
+A. Prevents unbalanced accounting entries from being posted to downstream systems
+B. Prevents revenue release from a transaction line
+C. Can be applied only to the allocation amount
+D. Restricts accounting entries from being transferred to the GL
+Answer: D
+
+96. Identify all the applicable types of hold setups that can be defined in Zuora Revenue.
+A. Transfer Hold and Transaction Hold
+B. Revenue Hold and Validation Hold
+C. Revenue Hold and Transfer Hold
+D. Revenue Hold and Approval Hold
+Answer: C
+
+97. Which of the following can be released through an event in Zuora Revenue? Select all that apply.
+A. Retain Amount
+B. Adjustment Revenue
+C. Revenue
+D. Holds
+E. Cost
+Answer: C, E
+
+98. Identify the event defined in Zuora Revenue to release revenue when a certain proportion of a predefined budget has been utilized?
+A. Budgeted hours event
+B. Cost event
+C. Revenue event
+D. Release hold
+E. Budgeted revenue event
+F. Budgeted cost event
+Answer: F
+
+99. Identify the release events that are available out-of-the-box in Zuora Revenue? Select all that apply.
+A. Upon billing
+B. Upon contract effective
+C. Upon service activation
+D. Upon booking
+E. Manual
+Answer: A, D, E
+
+100. When the Hold Level is POB, you cannot define criteria for applying the hold. Select True or False.
+A. FALSE
+B. TRUE
+Answer: A
+
+101. In Zuora Revenue, you can define Approval Rules for the following:
+A. Journal Entries
+B. Manual JE
+C. Revenue Contract
+D. Revenue Reports
+Answer: C
+
+102. In Zuora Revenue, who can approve or reject approvals on behalf of all other users?
+A. A user with full access to Setups
+B. A user with Override Approver permission
+C. A user with Override Soft Freeze
+D. A user with full access to Data Interface
+Answer: B
+
+103. Which of the following event type allows you to configure event using a cumulative or a non-cumulative event?
+A. Revenue
+B. Hold
+C. Budgeted Hours
+D. Cost
+E. Budgeted Cost
+Answer: A
+
+104. Identify the type of hold that prevents revenue release from a POB in Zuora Revenue.
+A. Validation Hold
+B. Approval Hold
+C. Transfer Hold
+D. Revenue Hold
+Answer: D
+
+105. A legally binding agreement that defines and governs the enforceable rights and obligations between parties is called a ______________
+A. Contract with valid agreement
+B. Performance Obligation
+C. Delivery Challan
+D. Acceptance Note
+Answer: A
 
