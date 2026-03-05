@@ -14,7 +14,7 @@ let flaggedQuestions = new Set();
 
 const PLATFORM_FILES = {
     billing: ['Data/zuora_billing.docx', 'Data/zuora_billing_300.docx'],
-    revenue: ['Data/zuora_revenue_questions.docx']
+    revenue: ['Data/Revenue_data.txt']
 };
 
 /**
@@ -346,3 +346,4 @@ async function parsePDF(data) {
     return out;
 }
 function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
+
