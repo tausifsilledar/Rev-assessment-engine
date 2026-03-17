@@ -1,297 +1,349 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Quiz Viewer</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';</script>
-  
-    <style>
-        :root {
-            --primary-bg: #f3f4f6;
-            --sidebar-bg: #ffffff;
-            --accent-color: #2563eb;
-            --text-main: #1f2937;
-            --text-muted: #6b7280;
-            --border-color: #e5e7eb;
-            --header-height: 70px;
-            --success-color: #059669;
-            --danger-color: #dc2626;
+/**
+ * GLOBAL STATE
+ */
+let questions = [];
+let currentIndex = 0;
+let userAnswers = {}; 
+let currentMode = 'learner'; 
+let timeLeft = 0;
+let timerInterval = null;
+let isSubmitted = false;
+let startTime = 0;
+let uploadedFileNames = [];
+let flaggedQuestions = new Set();
+
+const PLATFORM_FILES = {
+    billing: ['Data/zuora_billing.docx', 'Data/zuora_billing_300.docx'],
+    revenue: ['Data/zuora_revenue_questions.docx']
+};
+
+/**
+ * DOM ELEMENTS
+ */
+const fileInput = document.getElementById('fileInput');
+const fileNameDisplay = document.getElementById('fileNameDisplay');
+const navList = document.getElementById('navList');
+const welcomeScreen = document.getElementById('welcomeScreen');
+const questionCard = document.getElementById('questionCard');
+const qText = document.getElementById('qText');
+const qNumText = document.getElementById('qNumText');
+const optionsList = document.getElementById('optionsList');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const submitBtn = document.getElementById('submitBtn');
+const resetBtn = document.getElementById('resetBtn');
+const progressIndicator = document.getElementById('progressIndicator');
+const modeSwitcher = document.getElementById('modeSwitcher');
+const platformSelect = document.getElementById('platformSelect');
+const timerDisplay = document.getElementById('timerDisplay');
+const resultModal = document.getElementById('resultModal');
+const resultDetails = document.getElementById('resultDetails');
+const helpBtn = document.getElementById('helpBtn');
+const helpModal = document.getElementById('helpModal');
+const guideBtn = document.getElementById('guideBtn');
+const formatModal = document.getElementById('formatModal');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+
+/**
+ * INITIALIZATION
+ */
+window.addEventListener('DOMContentLoaded', () => {
+    addFlagButton();
+    addJumpButton();
+    restoreProgress(); 
+    handlePlatformChange();
+});
+
+/**
+ * SEARCH & MODAL LOGIC
+ */
+searchBtn.addEventListener('click', () => {
+    const term = searchInput.value.toLowerCase().trim();
+    renderNav(term);
+});
+
+searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') renderNav(searchInput.value.toLowerCase().trim());
+});
+
+helpBtn.addEventListener('click', () => helpModal.style.display = 'flex');
+guideBtn.addEventListener('click', () => formatModal.style.display = 'flex');
+
+window.addEventListener('click', (e) => {
+    if (e.target === helpModal) helpModal.style.display = 'none';
+    if (e.target === formatModal) formatModal.style.display = 'none';
+    if (e.target === resultModal) resultModal.style.display = 'none';
+});
+
+/**
+ * PLATFORM SELECTION
+ */
+platformSelect.addEventListener('change', () => {
+    localStorage.setItem('selected_platform', platformSelect.value);
+    userAnswers = {}; flaggedQuestions = new Set(); currentIndex = 0;
+    searchInput.value = ""; // Clear search on platform change
+    localStorage.removeItem('quiz_progress_save');
+    handlePlatformChange();
+});
+
+async function handlePlatformChange() {
+    const selected = platformSelect.value;
+    const filesToLoad = PLATFORM_FILES[selected] || [];
+    questions = []; uploadedFileNames = [];
+    navList.innerHTML = ''; questionCard.style.display = 'none';
+    welcomeScreen.style.display = 'block';
+    updateFileNameUI();
+    
+    for (const filePath of filesToLoad) {
+        try {
+            const response = await fetch(`${filePath}?t=${Date.now()}`);
+            if (!response.ok) continue;
+            const arrayBuffer = await response.arrayBuffer();
+            const fileName = filePath.split('/').pop();
+            if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
+            const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+            parseQuestions(res.value, false); 
+            updateFileNameUI();
+        } catch (err) { console.error("Auto-load failed", err); }
+    }
+    if (questions.length > 0) initQuiz();
+}
+
+/**
+ * PARSING LOGIC
+ */
+function parseQuestions(rawText, shouldInit = true) {
+    const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
+    const chunks = cleanText.split(/(?=\n\s*\d+\.)|(?=^\s*\d+\.)/g);
+    chunks.forEach(chunk => {
+        const block = chunk.trim();
+        if (!block) return;
+        const parts = block.split(/(?=\s[A-G]\.\s)|(?=\n[A-G]\.\s)|(?=^[A-G]\.\s)/g);
+        if (parts.length > 1) {
+            let body = parts[0].replace(/^\s*\d+\.\s*/, '').trim();
+            let options = [];
+            let correctAns = "";
+            for (let i = 1; i < parts.length; i++) {
+                let optText = parts[i].trim();
+                if (optText.toLowerCase().includes("answer:")) {
+                    const splitArr = optText.split(/answer[:\s]+/i);
+                    optText = splitArr[0].trim();
+                    correctAns = splitArr[1] ? splitArr[1].trim() : "";
+                }
+                if (optText) options.push(optText);
+            }
+            if (options.length > 0) questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
         }
+    });
+    if (shouldInit && questions.length > 0) initQuiz();
+}
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+/**
+ * NAVIGATION RENDERER (WITH SEARCH FILTER)
+ */
+function renderNav(filter = "") {
+    navList.innerHTML = '';
+    let hasMatches = false;
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--primary-bg);
-            color: var(--text-main);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+    questions.forEach((q, index) => {
+        const textToSearch = q.text.toLowerCase();
+        
+        // EXCLUSIVE FILTER: Hide if doesn't match search term
+        if (filter !== "" && !textToSearch.includes(filter)) return;
+
+        hasMatches = true;
+        const isAns = userAnswers[index] && userAnswers[index].length > 0;
+        const div = document.createElement('div');
+        div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
+        
+        if (flaggedQuestions.has(index)) div.style.borderRight = "4px solid #dc2626";
+        
+        const preview = q.text.substring(0, 20);
+        div.innerHTML = `<span>Q${q.originalNumber}</span> <span style="font-size:0.7rem; color:#9ca3af; margin-left:5px;">${preview}...</span> ${isAns ? '<span>✓</span>' : ''}`;
+        
+        div.onclick = () => { currentIndex = index; renderQuestion(); };
+        navList.appendChild(div);
+    });
+
+    if (!hasMatches && filter !== "") {
+        navList.innerHTML = `<div style="text-align:center; padding:20px; color:#9ca3af; font-size:0.8rem;">No questions found for "${filter}"</div>`;
+    }
+}
+
+/**
+ * QUESTION RENDERING
+ */
+function renderQuestion() {
+    const q = questions[currentIndex];
+    if (!q) return;
+    qNumText.innerText = `Question ${currentIndex + 1} of ${questions.length}`;
+    qText.innerText = q.text;
+    optionsList.innerHTML = '';
+    
+    const fBtn = document.getElementById('flagBtn');
+    if(fBtn) {
+        fBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag";
+        fBtn.style.background = flaggedQuestions.has(currentIndex) ? "#fee2e2" : "#f3f4f6";
+    }
+
+    const ansKeys = q.answer.match(/[A-G]/gi) || [];
+    const isMulti = ansKeys.length > 1;
+    q.options.forEach((opt, idx) => {
+        const label = document.createElement('label');
+        label.className = 'option-label';
+        const isSel = userAnswers[currentIndex]?.includes(idx);
+        const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
+        if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
+            label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5";
         }
+        label.innerHTML = `<input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''} onchange="handleSelection(${idx}, ${isMulti})"><span style="margin-left:10px;">${opt}</span>`;
+        optionsList.appendChild(label);
+    });
+    
+    prevBtn.disabled = currentIndex === 0;
+    nextBtn.disabled = currentIndex === questions.length - 1;
+    progressIndicator.innerText = `Progress: ${Math.round(((currentIndex + 1) / questions.length) * 100)}%`;
+    
+    // Maintain filter while navigating
+    renderNav(searchInput.value.toLowerCase().trim());
+}
 
-        header {
-            height: var(--header-height);
-            background-color: #111827;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 24px;
-            z-index: 100;
-        }
+function handleSelection(idx, multi) {
+    if (isSubmitted) return;
+    if (!userAnswers[currentIndex]) userAnswers[currentIndex] = [];
+    if (multi) {
+        if (userAnswers[currentIndex].includes(idx)) userAnswers[currentIndex] = userAnswers[currentIndex].filter(i => i !== idx);
+        else userAnswers[currentIndex].push(idx);
+    } else userAnswers[currentIndex] = [idx];
+    
+    saveProgress();
+    renderNav(searchInput.value.toLowerCase().trim());
+}
 
-        .header-controls { display: flex; align-items: center; gap: 10px; }
+/**
+ * UTILITIES & BUTTONS
+ */
+function initQuiz() {
+    currentMode = modeSwitcher.value; 
+    currentIndex = Math.min(currentIndex, questions.length - 1);
+    isSubmitted = false;
+    welcomeScreen.style.display = 'none';
+    questionCard.style.display = 'block';
+    resetBtn.style.display = 'block';
+    submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
+    timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
+    startTime = Date.now();
+    if (currentMode === 'timed') startTimer(questions.length * 60); 
+    renderQuestion();
+}
 
-        .search-input {
-            background: #374151;
-            color: white;
-            border: 1px solid #4b5563;
-            padding: 6px 12px;
-            border-radius: 4px;
-            outline: none;
-            width: 200px;
-            font-size: 0.85rem;
-        }
-        .search-input::placeholder { color: #9ca3af; }
+function addFlagButton() {
+    const flagContainer = document.getElementById('flagContainer');
+    const flagBtn = document.createElement('button');
+    flagBtn.id = "flagBtn";
+    flagBtn.style = "margin-bottom: 15px; background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 14px; border-radius: 6px; cursor: pointer;";
+    flagBtn.onclick = toggleFlag;
+    flagContainer.appendChild(flagBtn);
+}
 
-        #timerDisplay {
-            font-family: monospace;
-            background: var(--danger-color);
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            display: none;
-        }
+function addJumpButton() {
+    const controls = document.getElementById('sidebarControls');
+    const jumpBtn = document.createElement('button');
+    jumpBtn.className = "btn-info";
+    jumpBtn.style = "width: 100%; margin-top: 10px; border-color: #f59e0b; color: #b45309;";
+    jumpBtn.innerText = "Jump to Unanswered";
+    jumpBtn.onclick = () => {
+        const next = questions.findIndex((_, i) => !userAnswers[i] || userAnswers[i].length === 0);
+        if (next !== -1) { currentIndex = next; renderQuestion(); }
+    };
+    controls.prepend(jumpBtn);
+}
 
-        .select-styled {
-            background: #374151;
-            color: white;
-            border: 1px solid #4b5563;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
+function toggleFlag() {
+    if (flaggedQuestions.has(currentIndex)) flaggedQuestions.delete(currentIndex);
+    else flaggedQuestions.add(currentIndex);
+    saveProgress();
+    renderNav(searchInput.value.toLowerCase().trim());
+}
 
-        .btn-header {
-            padding: 6px 14px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            border: none;
-            font-weight: 600;
-            transition: opacity 0.2s;
-        }
-        .btn-search { background: var(--accent-color); color: white; }
-        .btn-help { background: #4b5563; color: white; }
-        .btn-header:hover { opacity: 0.9; }
+function saveProgress() {
+    const data = { userAnswers, currentIndex, flaggedQuestions: Array.from(flaggedQuestions) };
+    localStorage.setItem('quiz_progress_save', JSON.stringify(data));
+}
 
-        main { display: flex; flex: 1; overflow: hidden; }
+function restoreProgress() {
+    const saved = localStorage.getItem('quiz_progress_save');
+    const savedPlat = localStorage.getItem('selected_platform');
+    if (savedPlat) platformSelect.value = savedPlat;
+    if (saved) {
+        const d = JSON.parse(saved);
+        userAnswers = d.userAnswers || {}; currentIndex = d.currentIndex || 0;
+        flaggedQuestions = new Set(d.flaggedQuestions || []);
+    }
+}
 
-        aside {
-            width: 300px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-        }
+function startTimer(s) {
+    timeLeft = s; 
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        const m = Math.floor(timeLeft/60), sc = timeLeft%60;
+        if(timerDisplay) timerDisplay.innerText = `${m.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
+        if(timeLeft <= 0) calculateResult(true);
+    }, 1000);
+}
 
-        .upload-section {
-            border: 2px dashed var(--border-color);
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-            margin-bottom: 10px;
-        }
+function stopTimer() { clearInterval(timerInterval); }
 
-        input[type="file"] { display: none; }
+function calculateResult(auto) {
+    isSubmitted = true; stopTimer();
+    let score = 0;
+    questions.forEach((q, i) => {
+        const correct = (q.answer.match(/[A-G]/gi) || []).map(l => l.toUpperCase()).sort();
+        const user = (userAnswers[i] || []).map(idx => String.fromCharCode(65 + idx)).sort();
+        if (correct.length > 0 && JSON.stringify(correct) === JSON.stringify(user)) score++;
+    });
+    resultDetails.innerHTML = `<p><strong>Score:</strong> ${score}/${questions.length} (${((score / questions.length) * 100).toFixed(1)}%)</p>`;
+    resultModal.style.display = 'flex';
+    renderQuestion(); 
+}
 
-        .custom-file-upload {
-            display: inline-block;
-            padding: 8px 16px;
-            background: var(--accent-color);
-            color: white;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-        }
+function navigate(d) { currentIndex += d; renderQuestion(); saveProgress(); }
+prevBtn.addEventListener('click', () => navigate(-1));
+nextBtn.addEventListener('click', () => navigate(1));
+submitBtn.addEventListener('click', () => calculateResult(false));
+resetBtn.addEventListener('click', () => { if(confirm("Reset all?")) { localStorage.clear(); location.reload(); }});
+fileInput.addEventListener('change', handleFile);
+async function handleFile(event) {
+    const files = event.target.files;
+    for (let file of files) {
+        if (!uploadedFileNames.includes(file.name)) uploadedFileNames.push(file.name);
+        const ext = file.name.split('.').pop().toLowerCase();
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            let text = "";
+            if (ext === 'docx' || ext === 'doc') {
+                const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+                text = res.value;
+            } else if (ext === 'pdf') {
+                text = await parsePDF(e.target.result);
+            } else { text = e.target.result; }
+            parseQuestions(text, true); 
+            updateFileNameUI();
+        };
+        if (['pdf','docx','doc'].includes(ext)) reader.readAsArrayBuffer(file);
+        else reader.readAsText(file);
+    }
+}
+async function parsePDF(data) {
+    const pdf = await pdfjsLib.getDocument({data}).promise;
+    let out = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        out += content.items.map(item => item.str).join(" ") + "\n";
+    }
+    return out;
+}
+function updateFileNameUI() { fileNameDisplay.innerText = uploadedFileNames.join(", "); }
 
-        #fileNameDisplay {
-            display: block;
-            font-size: 0.75rem;
-            color: var(--accent-color);
-            font-weight: bold;
-            margin-top: 8px;
-            word-wrap: break-word;
-        }
-
-        .btn-info {
-            background: none;
-            border: 1px solid var(--accent-color);
-            color: var(--accent-color);
-            font-size: 0.7rem;
-            padding: 4px 8px;
-            margin-top: 10px;
-            cursor: pointer;
-            border-radius: 4px;
-            font-weight: 600;
-        }
-
-        .nav-list { flex: 1; overflow-y: auto; margin-top: 10px; }
-
-        .nav-item {
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 6px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            border: 1px solid transparent;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.2s;
-        }
-
-        .nav-item.active { background: #eff6ff; color: var(--accent-color); font-weight: 600; border-color: #bfdbfe; }
-        .nav-item.answered { color: var(--success-color); }
-
-        .content-area { flex: 1; padding: 40px; overflow-y: auto; display: flex; justify-content: center; }
-
-        .question-card {
-            background: white; width: 100%; max-width: 800px; padding: 40px; border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: fit-content;
-        }
-
-        .question-number { color: var(--accent-color); font-weight: 700; font-size: 0.875rem; margin-bottom: 8px; display: block; }
-        .question-text { font-size: 1.25rem; line-height: 1.6; font-weight: 600; margin-bottom: 30px; }
-
-        .option-label {
-            display: flex; align-items: center; padding: 16px; border: 1px solid var(--border-color);
-            border-radius: 8px; cursor: pointer; margin-top: 10px; transition: background 0.2s;
-        }
-
-        .modal-overlay {
-            display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
-        }
-        .modal-content { background: white; padding: 35px; border-radius: 12px; max-width: 450px; width: 90%; }
-
-        .footer {
-            background: white; border-top: 1px solid var(--border-color);
-            padding: 16px 40px; display: flex; justify-content: space-between; align-items: center;
-        }
-
-        button { padding: 10px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; }
-        .btn-prev { background: #e5e7eb; }
-        .btn-next { background: var(--accent-color); color: white; }
-        .btn-submit { background: var(--success-color); color: white; display: none; }
-        .btn-reset { background: #6b7280; color: white; display: none; }
-    </style>
-</head>
-<body>
-
-<header>
-    <div class="header-title">Assessment Engine v2.0</div>
-    <div class="header-controls">
-        <input type="text" id="searchInput" class="search-input" placeholder="Search question text...">
-        <button id="searchBtn" class="btn-header btn-search">Search</button>
-        <div id="timerDisplay">00:00</div>
-        <button id="helpBtn" class="btn-header btn-help">Help</button>
-        <select id="modeSwitcher" class="select-styled">
-            <option value="test">Test</option>
-            <option value="timed">Test With Timer</option>
-            <option value="learner" selected>Learner Mode</option>
-        </select>
-    </div>
-</header>
-
-<main>
-    <aside>
-        <div style="margin-bottom: 15px;">
-            <label style="font-size: 0.75rem; font-weight: bold; color: var(--text-muted); display: block; margin-bottom: 5px;">SELECT PLATFORM</label>
-            <select id="platformSelect" class="select-styled" style="width: 100%; background: #f3f4f6; color: #111827; border: 1px solid #d1d5db;">
-                <option value="billing">Zuora Billing</option>
-                <option value="revenue">Zuora Revenue</option>
-            </select>
-        </div>
-
-        <div class="upload-section">
-            <label for="fileInput" class="custom-file-upload">Choose File</label>
-            <input type="file" id="fileInput" accept=".docx,.doc,.pdf,.txt,.xlsx,.csv" multiple />
-            <div id="fileNameDisplay">No files selected</div>
-            <button class="btn-info" id="guideBtn">Question Format Guide</button>
-        </div>
-        <div id="navList" class="nav-list"></div>
-        <div id="sidebarControls"></div> 
-    </aside>
-
-    <div class="content-area">
-        <div id="welcomeScreen" style="text-align: center;">
-            <h2 style="margin-bottom: 10px;">Ready to Begin?</h2>
-            <p>Select a platform or upload your assessment files.</p>
-        </div>
-        <div class="question-card" id="questionCard" style="display: none;">
-            <div id="flagContainer"></div>
-            <span id="qNumText" class="question-number"></span>
-            <div id="qText" class="question-text"></div>
-            <div id="optionsList" class="options-container"></div>
-        </div>
-    </div>
-</main>
-
-<div id="resultModal" class="modal-overlay">
-    <div class="modal-content" style="text-align: center;">
-        <h2 style="margin-bottom: 15px;">Assessment Summary</h2>
-        <div id="resultDetails" style="text-align: left; line-height: 2; margin-bottom: 25px;"></div>
-        <button class="btn-next" style="width: 100%;" onclick="document.getElementById('resultModal').style.display='none'">Review Answers</button>
-    </div>
-</div>
-
-<div id="formatModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 style="margin-bottom:15px;">Required Question Format</h3>
-        <p style="font-size: 0.85rem; text-align: left; line-height: 1.5; color: #4b5563;">
-            1. What is the capital of France?<br>
-            A. Berlin<br>
-            B. Paris<br>
-            C. Madrid<br>
-            Answer: B<br><br>
-            <em>Multiple answers: Answer: A, B</em>
-        </p>
-        <button class="btn-next" style="margin-top:20px; width:100%;" onclick="document.getElementById('formatModal').style.display='none'">Close</button>
-    </div>
-</div>
-
-<div id="helpModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 style="margin-bottom: 15px; color: #111827;">System Help</h3>
-        <p style="margin-bottom: 15px; font-size: 0.9rem; color: #dc2626;"><strong>⚠️ NEW QUESTIONS NOT SHOWING?</strong></p>
-        <p style="font-size: 0.85rem; line-height: 1.6; color: #4b5563;">
-            If you added questions but still see only the old ones, please use these shortcuts to force an update:<br><br>
-            <strong>• Windows: Press CTRL + F5</strong><br>
-            <strong>• Mac: Press CMD + SHIFT + R</strong><br>
-            <strong>• Mobile: Refresh the page twice.</strong>
-        </p>
-        <button class="btn-next" style="margin-top: 20px; width: 100%;" onclick="document.getElementById('helpModal').style.display='none'">Close Help</button>
-    </div>
-</div>
-
-<footer class="footer">
-    <button class="btn-prev" id="prevBtn" disabled>Previous</button>
-    <div id="progressIndicator" style="font-size: 0.9rem; font-weight: 500;">Ready</div>
-    <div style="display: flex; gap: 10px;">
-        <button class="btn-reset" id="resetBtn">Reset</button>
-        <button class="btn-next" id="nextBtn" disabled>Next</button>
-        <button class="btn-submit" id="submitBtn">Submit Assessment</button>
-    </div>
-</footer>
-
-<script src="backhand.js"></script>
-</body>
-</html>
