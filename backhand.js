@@ -1,297 +1,267 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Quiz Viewer</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';</script>
-  
-    <style>
-        :root {
-            --primary-bg: #f3f4f6;
-            --sidebar-bg: #ffffff;
-            --accent-color: #2563eb;
-            --text-main: #1f2937;
-            --text-muted: #6b7280;
-            --border-color: #e5e7eb;
-            --header-height: 70px;
-            --success-color: #059669;
-            --danger-color: #dc2626;
+/**
+ * GLOBAL STATE
+ */
+let questions = [];
+let originalPool = []; // Stores the full, ordered question set
+let currentIndex = 0;
+let userAnswers = {}; 
+let currentMode = 'learner'; 
+let isSubmitted = false;
+let uploadedFileNames = [];
+let flaggedQuestions = new Set();
+
+const PLATFORM_FILES = {
+    billing: ['Data/zuora_billing.docx', 'Data/zuora_billing_300.docx'],
+    revenue: ['Data/zuora_revenue_questions.docx']
+};
+
+/**
+ * DOM ELEMENTS
+ */
+const navList = document.getElementById('navList');
+const welcomeScreen = document.getElementById('welcomeScreen');
+const questionCard = document.getElementById('questionCard');
+const qText = document.getElementById('qText');
+const qNumText = document.getElementById('qNumText');
+const optionsList = document.getElementById('optionsList');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const submitBtn = document.getElementById('submitBtn');
+const resetBtn = document.getElementById('resetBtn');
+const modeSwitcher = document.getElementById('modeSwitcher');
+const platformSelect = document.getElementById('platformSelect');
+const timerDisplay = document.getElementById('timerDisplay');
+const resultModal = document.getElementById('resultModal');
+const resultDetails = document.getElementById('resultDetails');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const fileNameDisplay = document.getElementById('fileNameDisplay');
+
+/**
+ * INITIALIZATION
+ */
+window.addEventListener('DOMContentLoaded', () => {
+    addFlagButton();
+    addJumpButton();
+    restoreProgress(); 
+    handlePlatformChange();
+
+    // Mode Switcher Listener
+    modeSwitcher.addEventListener('change', () => {
+        if (originalPool.length === 0) return;
+
+        if (modeSwitcher.value === 'test') {
+            window.QuizLogic.openTestSetup(originalPool.length, (count, useTimer) => {
+                // Shuffle, slice, and start
+                questions = window.QuizLogic.shuffle([...originalPool]).slice(0, count);
+                currentMode = useTimer ? 'timed' : 'test';
+                userAnswers = {};
+                currentIndex = 0;
+                initQuiz();
+            });
+        } else {
+            exitTestSession();
         }
+    });
+});
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+/**
+ * TEST SESSION MANAGEMENT
+ */
+function exitTestSession() {
+    if (window.QuizLogic.timerInterval) clearInterval(window.QuizLogic.timerInterval);
+    window.QuizLogic.toggleExitButton(false);
+    questions = [...originalPool]; // Restore full pool in order
+    currentMode = 'learner';
+    modeSwitcher.value = 'learner';
+    initQuiz();
+}
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--primary-bg);
-            color: var(--text-main);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+function initQuiz() {
+    isSubmitted = false;
+    welcomeScreen.style.display = 'none';
+    questionCard.style.display = 'block';
+    resetBtn.style.display = 'block';
+
+    // Visibility
+    submitBtn.style.display = (currentMode === 'learner') ? 'none' : 'block';
+    timerDisplay.style.display = (currentMode === 'timed') ? 'block' : 'none';
+
+    // Handle Test UI (Timer & Exit Button)
+    if (currentMode === 'timed' || currentMode === 'test') {
+        window.QuizLogic.toggleExitButton(true, exitTestSession);
+        if (currentMode === 'timed') {
+            window.QuizLogic.startTimer(questions.length * 60, timerDisplay, calculateResult);
         }
+    } else {
+        window.QuizLogic.toggleExitButton(false);
+        if (window.QuizLogic.timerInterval) clearInterval(window.QuizLogic.timerInterval);
+    }
 
-        header {
-            height: var(--header-height);
-            background-color: #111827;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 24px;
-            z-index: 100;
+    renderQuestion();
+}
+
+/**
+ * PARSING LOGIC
+ */
+async function handlePlatformChange() {
+    const selected = platformSelect.value;
+    const filesToLoad = PLATFORM_FILES[selected] || [];
+    questions = []; uploadedFileNames = [];
+    
+    for (const filePath of filesToLoad) {
+        try {
+            const response = await fetch(`${filePath}?t=${Date.now()}`);
+            if (!response.ok) continue;
+            const arrayBuffer = await response.arrayBuffer();
+            const fileName = filePath.split('/').pop();
+            if (!uploadedFileNames.includes(fileName)) uploadedFileNames.push(fileName);
+            const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+            parseQuestions(res.value, false); 
+        } catch (err) { console.error("Load failed", err); }
+    }
+    if (questions.length > 0) {
+        originalPool = [...questions]; // Save the master list
+        initQuiz();
+    }
+}
+
+function parseQuestions(rawText, shouldInit = true) {
+    const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' '); 
+    const chunks = cleanText.split(/(?=\n\s*\d+\.)|(?=^\s*\d+\.)/g);
+    chunks.forEach(chunk => {
+        const block = chunk.trim();
+        if (!block) return;
+        const parts = block.split(/(?=\s[A-G]\.\s)|(?=\n[A-G]\.\s)|(?=^[A-G]\.\s)/g);
+        if (parts.length > 1) {
+            let body = parts[0].replace(/^\s*\d+\.\s*/, '').trim();
+            let options = [];
+            let correctAns = "";
+            for (let i = 1; i < parts.length; i++) {
+                let optText = parts[i].trim();
+                if (optText.toLowerCase().includes("answer:")) {
+                    const splitArr = optText.split(/answer[:\s]+/i);
+                    optText = splitArr[0].trim();
+                    correctAns = splitArr[1] ? splitArr[1].trim() : "";
+                }
+                if (optText) options.push(optText);
+            }
+            if (options.length > 0) questions.push({ originalNumber: questions.length + 1, text: body, options, answer: correctAns });
         }
+    });
+    originalPool = [...questions];
+    if (shouldInit && questions.length > 0) initQuiz();
+}
 
-        .header-controls { display: flex; align-items: center; gap: 10px; }
+/**
+ * UI RENDERING
+ */
+function renderNav(filter = "") {
+    navList.innerHTML = '';
+    const term = filter.toLowerCase().trim();
+    questions.forEach((q, index) => {
+        if (term !== "" && !q.text.toLowerCase().includes(term)) return;
 
-        .search-input {
-            background: #374151;
-            color: white;
-            border: 1px solid #4b5563;
-            padding: 6px 12px;
-            border-radius: 4px;
-            outline: none;
-            width: 200px;
-            font-size: 0.85rem;
+        const isAns = userAnswers[index] && userAnswers[index].length > 0;
+        const div = document.createElement('div');
+        div.className = `nav-item ${index === currentIndex ? 'active' : ''} ${isAns ? 'answered' : ''}`;
+        if (flaggedQuestions.has(index)) div.style.borderRight = "4px solid #dc2626";
+        
+        div.innerHTML = `<span>Q${q.originalNumber}</span> <span style="font-size:0.7rem; color:#9ca3af; margin-left:5px;">${q.text.substring(0, 15)}...</span>`;
+        div.onclick = () => { currentIndex = index; renderQuestion(); };
+        navList.appendChild(div);
+    });
+}
+
+function renderQuestion() {
+    const q = questions[currentIndex];
+    if (!q) return;
+    qNumText.innerText = `Question ${currentIndex + 1} of ${questions.length}`;
+    qText.innerText = q.text;
+    optionsList.innerHTML = '';
+    
+    const fBtn = document.getElementById('flagBtn');
+    if(fBtn) fBtn.innerText = flaggedQuestions.has(currentIndex) ? "🚩 Unflag" : "🚩 Flag";
+
+    const ansKeys = q.answer.match(/[A-G]/gi) || [];
+    const isMulti = ansKeys.length > 1;
+
+    q.options.forEach((opt, idx) => {
+        const label = document.createElement('label');
+        label.className = 'option-label';
+        const isSel = userAnswers[currentIndex]?.includes(idx);
+        const isCorrect = ansKeys.some(k => k.toUpperCase() === String.fromCharCode(65 + idx));
+
+        if ((currentMode === 'learner' || isSubmitted) && isCorrect) {
+            label.style.borderColor = "#059669"; label.style.backgroundColor = "#ecfdf5";
         }
-        .search-input::placeholder { color: #9ca3af; }
+        label.innerHTML = `<input type="${isMulti ? 'checkbox' : 'radio'}" name="q_grp" ${isSel ? 'checked' : ''} ${isSubmitted ? 'disabled' : ''} onchange="handleSelection(${idx}, ${isMulti})"><span style="margin-left:10px;">${opt}</span>`;
+        optionsList.appendChild(label);
+    });
 
-        #timerDisplay {
-            font-family: monospace;
-            background: var(--danger-color);
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            display: none;
-        }
+    prevBtn.disabled = currentIndex === 0;
+    nextBtn.disabled = currentIndex === questions.length - 1;
+    renderNav(searchInput.value);
+}
 
-        .select-styled {
-            background: #374151;
-            color: white;
-            border: 1px solid #4b5563;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
+function handleSelection(idx, multi) {
+    if (isSubmitted) return;
+    if (!userAnswers[currentIndex]) userAnswers[currentIndex] = [];
+    if (multi) {
+        if (userAnswers[currentIndex].includes(idx)) userAnswers[currentIndex] = userAnswers[currentIndex].filter(i => i !== idx);
+        else userAnswers[currentIndex].push(idx);
+    } else userAnswers[currentIndex] = [idx];
+    renderNav(searchInput.value);
+}
 
-        .btn-header {
-            padding: 6px 14px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            border: none;
-            font-weight: 600;
-            transition: opacity 0.2s;
-        }
-        .btn-search { background: var(--accent-color); color: white; }
-        .btn-help { background: #4b5563; color: white; }
-        .btn-header:hover { opacity: 0.9; }
+/**
+ * RESULTS & NAVIGATION
+ */
+function calculateResult() {
+    isSubmitted = true;
+    if (window.QuizLogic.timerInterval) clearInterval(window.QuizLogic.timerInterval);
+    const score = window.QuizLogic.calculateScore(questions, userAnswers);
+    resultDetails.innerHTML = `<p><strong>Score:</strong> ${score}/${questions.length} (${((score/questions.length)*100).toFixed(1)}%)</p>`;
+    resultModal.style.display = 'flex';
+    renderQuestion(); 
+}
 
-        main { display: flex; flex: 1; overflow: hidden; }
+function navigate(d) { currentIndex += d; renderQuestion(); }
+prevBtn.onclick = () => navigate(-1);
+nextBtn.onclick = () => navigate(1);
+submitBtn.onclick = () => calculateResult();
+resetBtn.onclick = () => { if(confirm("Reset all?")) location.reload(); };
 
-        aside {
-            width: 300px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-        }
+// Search logic
+searchBtn.onclick = () => renderNav(searchInput.value);
+searchInput.onkeypress = (e) => { if (e.key === 'Enter') renderNav(searchInput.value); };
 
-        .upload-section {
-            border: 2px dashed var(--border-color);
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-            margin-bottom: 10px;
-        }
+/**
+ * FLAG & JUMP BUTTONS
+ */
+function addFlagButton() {
+    const flagContainer = document.getElementById('flagContainer');
+    const flagBtn = document.createElement('button');
+    flagBtn.id = "flagBtn";
+    flagBtn.className = "btn-secondary";
+    flagBtn.onclick = () => {
+        if (flaggedQuestions.has(currentIndex)) flaggedQuestions.delete(currentIndex);
+        else flaggedQuestions.add(currentIndex);
+        renderQuestion();
+    };
+    flagContainer.appendChild(flagBtn);
+}
 
-        input[type="file"] { display: none; }
+function addJumpButton() {
+    const controls = document.getElementById('sidebarControls');
+    const jumpBtn = document.createElement('button');
+    jumpBtn.className = "btn-info";
+    jumpBtn.innerText = "Jump to Unanswered";
+    jumpBtn.onclick = () => {
+        const next = questions.findIndex((_, i) => !userAnswers[i] || userAnswers[i].length === 0);
+        if (next !== -1) { currentIndex = next; renderQuestion(); }
+    };
+    controls.prepend(jumpBtn);
+}
 
-        .custom-file-upload {
-            display: inline-block;
-            padding: 8px 16px;
-            background: var(--accent-color);
-            color: white;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-
-        #fileNameDisplay {
-            display: block;
-            font-size: 0.75rem;
-            color: var(--accent-color);
-            font-weight: bold;
-            margin-top: 8px;
-            word-wrap: break-word;
-        }
-
-        .btn-info {
-            background: none;
-            border: 1px solid var(--accent-color);
-            color: var(--accent-color);
-            font-size: 0.7rem;
-            padding: 4px 8px;
-            margin-top: 10px;
-            cursor: pointer;
-            border-radius: 4px;
-            font-weight: 600;
-        }
-
-        .nav-list { flex: 1; overflow-y: auto; margin-top: 10px; }
-
-        .nav-item {
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 6px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            border: 1px solid transparent;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.2s;
-        }
-
-        .nav-item.active { background: #eff6ff; color: var(--accent-color); font-weight: 600; border-color: #bfdbfe; }
-        .nav-item.answered { color: var(--success-color); }
-
-        .content-area { flex: 1; padding: 40px; overflow-y: auto; display: flex; justify-content: center; }
-
-        .question-card {
-            background: white; width: 100%; max-width: 800px; padding: 40px; border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: fit-content;
-        }
-
-        .question-number { color: var(--accent-color); font-weight: 700; font-size: 0.875rem; margin-bottom: 8px; display: block; }
-        .question-text { font-size: 1.25rem; line-height: 1.6; font-weight: 600; margin-bottom: 30px; }
-
-        .option-label {
-            display: flex; align-items: center; padding: 16px; border: 1px solid var(--border-color);
-            border-radius: 8px; cursor: pointer; margin-top: 10px; transition: background 0.2s;
-        }
-
-        .modal-overlay {
-            display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
-        }
-        .modal-content { background: white; padding: 35px; border-radius: 12px; max-width: 450px; width: 90%; }
-
-        .footer {
-            background: white; border-top: 1px solid var(--border-color);
-            padding: 16px 40px; display: flex; justify-content: space-between; align-items: center;
-        }
-
-        button { padding: 10px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; }
-        .btn-prev { background: #e5e7eb; }
-        .btn-next { background: var(--accent-color); color: white; }
-        .btn-submit { background: var(--success-color); color: white; display: none; }
-        .btn-reset { background: #6b7280; color: white; display: none; }
-    </style>
-</head>
-<body>
-
-<header>
-    <div class="header-title">Assessment Engine v2.0</div>
-    <div class="header-controls">
-        <input type="text" id="searchInput" class="search-input" placeholder="Search question text...">
-        <button id="searchBtn" class="btn-header btn-search">Search</button>
-        <div id="timerDisplay">00:00</div>
-        <button id="helpBtn" class="btn-header btn-help">Help</button>
-        <select id="modeSwitcher" class="select-styled">
-            <option value="test">Test</option>
-            <option value="timed">Test With Timer</option>
-            <option value="learner" selected>Learner Mode</option>
-        </select>
-    </div>
-</header>
-
-<main>
-    <aside>
-        <div style="margin-bottom: 15px;">
-            <label style="font-size: 0.75rem; font-weight: bold; color: var(--text-muted); display: block; margin-bottom: 5px;">SELECT PLATFORM</label>
-            <select id="platformSelect" class="select-styled" style="width: 100%; background: #f3f4f6; color: #111827; border: 1px solid #d1d5db;">
-                <option value="billing">Zuora Billing</option>
-                <option value="revenue">Zuora Revenue</option>
-            </select>
-        </div>
-
-        <div class="upload-section">
-            <label for="fileInput" class="custom-file-upload">Choose File</label>
-            <input type="file" id="fileInput" accept=".docx,.doc,.pdf,.txt,.xlsx,.csv" multiple />
-            <div id="fileNameDisplay">No files selected</div>
-            <button class="btn-info" id="guideBtn">Question Format Guide</button>
-        </div>
-        <div id="navList" class="nav-list"></div>
-        <div id="sidebarControls"></div> 
-    </aside>
-
-    <div class="content-area">
-        <div id="welcomeScreen" style="text-align: center;">
-            <h2 style="margin-bottom: 10px;">Ready to Begin?</h2>
-            <p>Select a platform or upload your assessment files.</p>
-        </div>
-        <div class="question-card" id="questionCard" style="display: none;">
-            <div id="flagContainer"></div>
-            <span id="qNumText" class="question-number"></span>
-            <div id="qText" class="question-text"></div>
-            <div id="optionsList" class="options-container"></div>
-        </div>
-    </div>
-</main>
-
-<div id="resultModal" class="modal-overlay">
-    <div class="modal-content" style="text-align: center;">
-        <h2 style="margin-bottom: 15px;">Assessment Summary</h2>
-        <div id="resultDetails" style="text-align: left; line-height: 2; margin-bottom: 25px;"></div>
-        <button class="btn-next" style="width: 100%;" onclick="document.getElementById('resultModal').style.display='none'">Review Answers</button>
-    </div>
-</div>
-
-<div id="formatModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 style="margin-bottom:15px;">Required Question Format</h3>
-        <p style="font-size: 0.85rem; text-align: left; line-height: 1.5; color: #4b5563;">
-            1. What is the capital of France?<br>
-            A. Berlin<br>
-            B. Paris<br>
-            C. Madrid<br>
-            Answer: B<br><br>
-            <em>Multiple answers: Answer: A, B</em>
-        </p>
-        <button class="btn-next" style="margin-top:20px; width:100%;" onclick="document.getElementById('formatModal').style.display='none'">Close</button>
-    </div>
-</div>
-
-<div id="helpModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 style="margin-bottom: 15px; color: #111827;">System Help</h3>
-        <p style="margin-bottom: 15px; font-size: 0.9rem; color: #dc2626;"><strong>⚠️ NEW QUESTIONS NOT SHOWING?</strong></p>
-        <p style="font-size: 0.85rem; line-height: 1.6; color: #4b5563;">
-            If you added questions but still see only the old ones, please use these shortcuts to force an update:<br><br>
-            <strong>• Windows: Press CTRL + F5</strong><br>
-            <strong>• Mac: Press CMD + SHIFT + R</strong><br>
-            <strong>• Mobile: Refresh the page twice.</strong>
-        </p>
-        <button class="btn-next" style="margin-top: 20px; width: 100%;" onclick="document.getElementById('helpModal').style.display='none'">Close Help</button>
-    </div>
-</div>
-
-<footer class="footer">
-    <button class="btn-prev" id="prevBtn" disabled>Previous</button>
-    <div id="progressIndicator" style="font-size: 0.9rem; font-weight: 500;">Ready</div>
-    <div style="display: flex; gap: 10px;">
-        <button class="btn-reset" id="resetBtn">Reset</button>
-        <button class="btn-next" id="nextBtn" disabled>Next</button>
-        <button class="btn-submit" id="submitBtn">Submit Assessment</button>
-    </div>
-</footer>
-
-<script src="backhand.js"></script>
-</body>
-</html>
+function restoreProgress() { /* ... existing localStorage logic ... */ }
